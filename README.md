@@ -41,9 +41,8 @@ export PROCESSOR_ARTIFACT_PATH=/absolute/path/to/processor.zip
 ```
 
 The configured handler is `Processor::Processor.Function::FunctionHandler`: the
-`Processor` assembly, `Processor.Function` type, and `FunctionHandler` method.
-The processor repository must provide that Lambda adapter before the deployed
-function can process SQS messages.
+`Processor` assembly, `Processor.Function` type, and `FunctionHandler` method. The
+processor repository provides this SQS/S3 Lambda adapter alongside its CLI.
 
 ## Build, test, and deploy
 
