@@ -26,14 +26,26 @@ export class Storage extends Construct {
       removalPolicy: isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
       autoDeleteObjects: isDev,
       lifecycleRules: [
-        { id: 'ExpireUploads', prefix: UPLOADS_PREFIX, expiration: Duration.days(props.uploadsRetentionDays ?? 1) },
-        { id: 'ExpireReports', prefix: REPORTS_PREFIX, expiration: Duration.days(props.reportsRetentionDays ?? 7) },
+        {
+          id: 'ExpireUploads',
+          prefix: UPLOADS_PREFIX,
+          expiration: Duration.days(props.uploadsRetentionDays ?? 1),
+        },
+        {
+          id: 'ExpireReports',
+          prefix: REPORTS_PREFIX,
+          expiration: Duration.days(props.reportsRetentionDays ?? 7),
+        },
       ],
-      cors: props.corsOrigin ? [{
-        allowedMethods: [HttpMethods.PUT],
-        allowedOrigins: [props.corsOrigin],
-        allowedHeaders: ['*'],
-      }] : undefined,
+      cors: props.corsOrigin
+        ? [
+            {
+              allowedMethods: [HttpMethods.PUT],
+              allowedOrigins: [props.corsOrigin],
+              allowedHeaders: ['*'],
+            },
+          ]
+        : undefined,
     });
   }
 }

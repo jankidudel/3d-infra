@@ -1,1 +1,31 @@
-{"name":"3d-infra","version":"0.1.0","private":true,"scripts":{"build":"tsc --noEmit","test":"jest --runInBand","synth":"cdk synth","diff":"cdk diff","deploy":"cdk deploy"},"dependencies":{"aws-cdk-lib":"^2.210.0","constructs":"^10.4.2"},"devDependencies":{"@types/jest":"^30.0.0","@types/node":"^22.10.0","aws-cdk":"^2.1029.0","jest":"^30.0.0","ts-jest":"^29.4.0","ts-node":"^10.9.2","typescript":"^5.7.2"}}
+{
+  "name": "3d-infra",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "tsc --outDir dist --noEmit false && node --test dist/test/*.test.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "precommit": "npm run format:check && npm run lint && npm run build && npm test",
+    "prepare": "git config core.hooksPath .githooks",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.210.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@types/node": "^22.10.0",
+    "aws-cdk": "^2.1029.0",
+    "eslint": "^9.33.0",
+    "prettier": "^3.6.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.39.1"
+  }
+}

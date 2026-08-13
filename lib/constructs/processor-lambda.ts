@@ -9,9 +9,13 @@ import { PROCESSOR_TIMEOUT_SECONDS } from './processing-queue';
 import { REPORTS_PREFIX, UPLOADS_PREFIX } from './storage';
 
 export interface ProcessorLambdaProps {
-  readonly stage: string; readonly bucket: Bucket; readonly queue: Queue;
-  readonly artifactPath: string; readonly memorySize?: number;
-  readonly reservedConcurrency?: number; readonly logRetention?: RetentionDays;
+  readonly stage: string;
+  readonly bucket: Bucket;
+  readonly queue: Queue;
+  readonly artifactPath: string;
+  readonly memorySize?: number;
+  readonly reservedConcurrency?: number;
+  readonly logRetention?: RetentionDays;
 }
 
 export class ProcessorLambda extends Construct {
@@ -24,9 +28,12 @@ export class ProcessorLambda extends Construct {
       retention: props.logRetention ?? RetentionDays.ONE_WEEK,
     });
     this.function = new LambdaFunction(this, 'Function', {
-      functionName, runtime: Runtime.DOTNET_10, architecture: Architecture.X86_64,
+      functionName,
+      runtime: Runtime.DOTNET_10,
+      architecture: Architecture.X86_64,
       handler: '3d-processor::Processor.Function::FunctionHandler',
-      code: Code.fromAsset(props.artifactPath), memorySize: props.memorySize ?? 256,
+      code: Code.fromAsset(props.artifactPath),
+      memorySize: props.memorySize ?? 256,
       timeout: Duration.seconds(PROCESSOR_TIMEOUT_SECONDS),
       reservedConcurrentExecutions: props.reservedConcurrency ?? 1,
       environment: { STORAGE_BUCKET_NAME: props.bucket.bucketName, UPLOADS_PREFIX, REPORTS_PREFIX },
@@ -34,6 +41,8 @@ export class ProcessorLambda extends Construct {
     });
     props.bucket.grantRead(this.function, `${UPLOADS_PREFIX}*`);
     props.bucket.grantPut(this.function, `${REPORTS_PREFIX}*`);
-    this.function.addEventSource(new SqsEventSource(props.queue, { batchSize: 1, reportBatchItemFailures: true }));
+    this.function.addEventSource(
+      new SqsEventSource(props.queue, { batchSize: 1, reportBatchItemFailures: true }),
+    );
   }
 }

@@ -21,6 +21,7 @@ No database, API Gateway, frontend hosting, authentication, or application proce
 - Node.js and npm
 - AWS CLI credentials for the target account
 - AWS CDK v2 (provided as a local development dependency)
+- Node.js 22 or newer for the built-in test runner
 - A packaged Lambda artifact built by `3d-processor`
 
 The default region is `eu-west-2`; account IDs are read from the active AWS credentials.
@@ -48,6 +49,8 @@ Stage comes from `-c stage=...` or `STAGE` and defaults to `dev`.
 ```bash
 npm run build
 npm test
+npm run format:check
+npm run lint
 npx cdk synth -c stage=dev
 npx cdk diff -c stage=dev
 npx cdk deploy -c stage=dev
@@ -56,13 +59,25 @@ npx cdk destroy -c stage=dev
 
 The npm wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and `npm run deploy -- -c stage=dev`.
 
-| Setting | Context | Environment | Default |
-|---|---|---|---|
-| Artifact | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH` | required |
-| Memory (MB) | `processorMemory` | `PROCESSOR_MEMORY_MB` | `256` |
-| Reserved concurrency | `processorConcurrency` | `PROCESSOR_RESERVED_CONCURRENCY` | `1` |
-| Browser origin | `corsOrigin` | `CORS_ORIGIN` | localhost in dev; none in prod |
+| Setting              | Context                 | Environment                      | Default                        |
+| -------------------- | ----------------------- | -------------------------------- | ------------------------------ |
+| Artifact             | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH`        | required                       |
+| Memory (MB)          | `processorMemory`       | `PROCESSOR_MEMORY_MB`            | `256`                          |
+| Reserved concurrency | `processorConcurrency`  | `PROCESSOR_RESERVED_CONCURRENCY` | `1`                            |
+| Browser origin       | `corsOrigin`            | `CORS_ORIGIN`                    | localhost in dev; none in prod |
 
 For production, use `-c stage=prod` and explicitly set the production browser origin when needed. Production retains the bucket and its contents when the stack is deleted; development enables bucket cleanup. Review the CloudFormation diff and concurrency setting before every production deployment.
 
 The stack outputs the bucket name, queue URL, DLQ URL, and processor function name.
+
+## Code quality and pre-commit checks
+
+Run `npm run format` to format the repository with Prettier. `npm run lint` runs ESLint
+with type-aware TypeScript rules, and `npm run precommit` runs formatting validation,
+linting, the TypeScript build, and all tests.
+
+Tests use Node's native `node:test` runner. The test script compiles TypeScript into the
+ignored `dist/` directory before running `node --test`; no external test framework is used.
+
+`npm install` configures Git to use the tracked `.githooks` directory. Every commit then
+runs the same `npm run precommit` checks automatically.

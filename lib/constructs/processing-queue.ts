@@ -20,7 +20,9 @@ export class ProcessingQueue extends Construct {
       queueName: `3d-processing-${props.stage}`,
       encryption: QueueEncryption.SQS_MANAGED,
       retentionPeriod: Duration.days(4),
-      visibilityTimeout: Duration.seconds(PROCESSOR_TIMEOUT_SECONDS * VISIBILITY_TIMEOUT_MULTIPLIER),
+      visibilityTimeout: Duration.seconds(
+        PROCESSOR_TIMEOUT_SECONDS * VISIBILITY_TIMEOUT_MULTIPLIER,
+      ),
       deadLetterQueue: { queue: this.deadLetterQueue, maxReceiveCount: 3 },
     });
   }
