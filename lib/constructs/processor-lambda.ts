@@ -31,7 +31,7 @@ export class ProcessorLambda extends Construct {
       functionName,
       runtime: Runtime.DOTNET_10,
       architecture: Architecture.X86_64,
-      handler: '3d-processor::Processor.Function::FunctionHandler',
+      handler: 'Processor::Processor.Function::FunctionHandler',
       code: Code.fromAsset(props.artifactPath),
       memorySize: props.memorySize ?? 256,
       timeout: Duration.seconds(PROCESSOR_TIMEOUT_SECONDS),

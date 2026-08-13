@@ -40,7 +40,10 @@ export PROCESSOR_ARTIFACT_PATH=/absolute/path/to/processor.zip
 # or append: -c processorArtifactPath=/absolute/path/to/processor.zip
 ```
 
-The configured handler is `3d-processor::Processor.Function::FunctionHandler`; adjust it if the processor assembly, type, or method differs.
+The configured handler is `Processor::Processor.Function::FunctionHandler`: the
+`Processor` assembly, `Processor.Function` type, and `FunctionHandler` method.
+The processor repository must provide that Lambda adapter before the deployed
+function can process SQS messages.
 
 ## Build, test, and deploy
 
@@ -78,6 +81,33 @@ linting, the TypeScript build, and all tests.
 
 Tests use Node's native `node:test` runner. The test script compiles TypeScript into the
 ignored `dist/` directory before running `node --test`; no external test framework is used.
+
+`npm run test:synth` exercises the real CDK entry point with a test-only placeholder
+artifact. It is included in the pre-commit checks and never deploys anything.
+
+## Simplified workspace deployment
+
+When this repository is checked out beside `3d-processor`, use its versioned
+Makefile:
+
+```sh
+make synth-fast
+make synth-real
+make diff-dev
+make deploy-dev
+```
+
+`make diff-dev` and `make deploy-dev` test and publish the processor automatically,
+then pass its generated artifact directory to CDK. There is no manual ZIP creation,
+copying, or artifact-path configuration. Direct `npm run synth`, `npm run diff`, and
+`npm run deploy` remain available for standalone or CI usage and intentionally require
+`PROCESSOR_ARTIFACT_PATH`.
+
+The default sibling path can be overridden when repositories live elsewhere:
+
+```sh
+make deploy-dev PROCESSOR_DIR=/absolute/path/to/3d-processor
+```
 
 `npm install` configures Git to use the tracked `.githooks` directory. Every commit then
 runs the same `npm run precommit` checks automatically.

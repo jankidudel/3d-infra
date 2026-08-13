@@ -53,6 +53,7 @@ void test('creates the configured .NET processor and event mapping', () => {
   const result = template();
   result.hasResourceProperties('AWS::Lambda::Function', {
     Runtime: 'dotnet10',
+    Handler: 'Processor::Processor.Function::FunctionHandler',
     Architectures: ['x86_64'],
     MemorySize: 256,
     Timeout: 120,
