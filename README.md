@@ -96,8 +96,8 @@ make diff-dev
 make deploy-dev
 ```
 
-`make diff-dev` and `make deploy-dev` test and publish the processor automatically,
-then pass its generated artifact directory to CDK. There is no manual ZIP creation,
+`make diff-dev` and `make deploy-dev` package the processor automatically, then pass
+`3d-processor/artifacts/3d-processor.zip` to CDK. There is no manual ZIP creation,
 copying, or artifact-path configuration. Direct `npm run synth`, `npm run diff`, and
 `npm run deploy` remain available for standalone or CI usage and intentionally require
 `PROCESSOR_ARTIFACT_PATH`.

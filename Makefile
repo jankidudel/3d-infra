@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 INFRA_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 PROCESSOR_DIR ?= $(abspath $(INFRA_DIR)/../3d-processor)
-PROCESSOR_ARTIFACT := $(PROCESSOR_DIR)/artifacts/lambda
+PROCESSOR_ARTIFACT := $(PROCESSOR_DIR)/artifacts/3d-processor.zip
 TEST_ARTIFACT := $(INFRA_DIR)/test/fixtures/processor
 STAGE ?= dev
 
@@ -21,7 +21,7 @@ check:
 	npm run precommit
 
 processor-package:
-	cd "$(PROCESSOR_DIR)" && ./scripts/package-lambda.sh
+	$(MAKE) -C "$(PROCESSOR_DIR)" package
 
 synth-fast:
 	npm run test:synth
