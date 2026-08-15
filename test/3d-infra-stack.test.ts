@@ -4,14 +4,21 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { InfraStack } from '../lib/3d-infra-stack';
 
-function template(): Template {
+function template(stage = 'dev'): Template {
   const stack = new InfraStack(new App(), 'TestStack', {
-    stage: 'dev',
+    stage,
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
     corsOrigin: 'http://localhost:4200',
   });
   return Template.fromStack(stack);
 }
+
+void test('deletes newly created logs on rollback and otherwise retains them', () => {
+  template('dev').hasResource('AWS::Logs::LogGroup', {
+    DeletionPolicy: 'RetainExceptOnCreate',
+    UpdateReplacePolicy: 'Retain',
+  });
+});
 
 void test('creates secure storage with lifecycle policies', () => {
   template().hasResourceProperties('AWS::S3::Bucket', {

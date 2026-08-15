@@ -1,4 +1,4 @@
-import { Duration } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
@@ -26,6 +26,7 @@ export class ProcessorLambda extends Construct {
     const logGroup = new LogGroup(this, 'LogGroup', {
       logGroupName: `/aws/lambda/${functionName}`,
       retention: props.logRetention ?? RetentionDays.ONE_WEEK,
+      removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
     this.function = new LambdaFunction(this, 'Function', {
       functionName,

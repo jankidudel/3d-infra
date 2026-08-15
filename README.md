@@ -79,6 +79,11 @@ wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`
 
 For production, use `-c stage=prod` and explicitly set the production browser origin when needed. Production retains the bucket and its contents when the stack is deleted; development enables bucket cleanup. Review the CloudFormation diff and concurrency setting before every production deployment.
 
+Processor logs use the same lifecycle policy in every stage. A newly created log group is
+deleted if its initial deployment rolls back, preventing an empty orphan from blocking a
+retry. Once successfully deployed, the log group and its diagnostic history are retained
+if the stack is deleted or the resource is replaced.
+
 The stack outputs the bucket name, queue URL, DLQ URL, and processor function name.
 
 ## Code quality and pre-commit checks
