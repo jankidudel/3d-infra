@@ -57,7 +57,7 @@ void test('creates the configured .NET processor and event mapping', () => {
     Architectures: ['x86_64'],
     MemorySize: 256,
     Timeout: 120,
-    ReservedConcurrentExecutions: 1,
+    // ReservedConcurrentExecutions: 1,
     Environment: {
       Variables: {
         STORAGE_BUCKET_NAME: Match.anyValue(),

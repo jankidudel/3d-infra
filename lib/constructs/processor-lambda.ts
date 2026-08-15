@@ -35,14 +35,18 @@ export class ProcessorLambda extends Construct {
       code: Code.fromAsset(props.artifactPath),
       memorySize: props.memorySize ?? 256,
       timeout: Duration.seconds(PROCESSOR_TIMEOUT_SECONDS),
-      reservedConcurrentExecutions: props.reservedConcurrency ?? 1,
+      // reservedConcurrentExecutions: props.reservedConcurrency ?? 1, // @todo: review, can't be done right now, not enabled on AWS for new accounts.
       environment: { STORAGE_BUCKET_NAME: props.bucket.bucketName, UPLOADS_PREFIX, REPORTS_PREFIX },
       logGroup,
     });
     props.bucket.grantRead(this.function, `${UPLOADS_PREFIX}*`);
     props.bucket.grantPut(this.function, `${REPORTS_PREFIX}*`);
     this.function.addEventSource(
-      new SqsEventSource(props.queue, { batchSize: 1, reportBatchItemFailures: true }),
+      new SqsEventSource(props.queue, {
+        batchSize: 1,
+        reportBatchItemFailures: true,
+        maxConcurrency: 2, // This is the maximum number of concurrent Lambda invocations for this event source. Adjust as needed. Done because we can't limit number of reservedConcurrentExecutions on lambda itself.
+      }),
     );
   }
 }
