@@ -33,5 +33,5 @@ new InfraStack(app, `ThreeDInfra${stage}`, {
         process.env.CORS_ORIGIN ??
         (stage === 'dev' ? 'http://localhost:4200' : ''),
     ) || undefined,
-  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'eu-west-2' },
+  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
 });

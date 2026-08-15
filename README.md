@@ -24,12 +24,18 @@ No database, API Gateway, frontend hosting, authentication, or application proce
 - Node.js 22 or newer for the built-in test runner
 - A packaged Lambda artifact built by `3d-processor`
 
-The default region is `eu-west-2`; account IDs are read from the active AWS credentials.
+The default region is `us-east-1`; account IDs are read from the active AWS credentials.
 
 ```bash
 npm install
-npx cdk bootstrap aws://ACCOUNT_ID/eu-west-2
+AWS_PROFILE=your-profile make bootstrap
 ```
+
+The placeholder artifact is supplied because this repository validates the processor
+artifact whenever CDK loads the app, including during `cdk bootstrap`. Bootstrap creates
+only the regional CDK support stack; it does not deploy this placeholder processor. The
+Make target obtains the account ID from the active AWS credentials and defaults to
+`us-east-1`. Override the region with `AWS_REGION=...` if needed.
 
 ## Processor artifact boundary
 
@@ -53,13 +59,16 @@ npm run build
 npm test
 npm run format:check
 npm run lint
+export PROCESSOR_ARTIFACT_PATH=/absolute/path/to/processor.zip
 npx cdk synth -c stage=dev
 npx cdk diff -c stage=dev
 npx cdk deploy -c stage=dev
 npx cdk destroy -c stage=dev
 ```
 
-The npm wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and `npm run deploy -- -c stage=dev`.
+The artifact path is required by the CDK entry point for these direct commands. The npm
+wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and
+`npm run deploy -- -c stage=dev`.
 
 | Setting              | Context                 | Environment                      | Default                        |
 | -------------------- | ----------------------- | -------------------------------- | ------------------------------ |
@@ -90,17 +99,26 @@ When this repository is checked out beside `3d-processor`, use its versioned
 Makefile:
 
 ```sh
+make bootstrap
 make synth-fast
 make synth-real
 make diff-dev
 make deploy-dev
+make destroy-dev
 ```
 
-`make diff-dev` and `make deploy-dev` package the processor automatically, then pass
-`3d-processor/artifacts/3d-processor.zip` to CDK. There is no manual ZIP creation,
-copying, or artifact-path configuration. Direct `npm run synth`, `npm run diff`, and
-`npm run deploy` remain available for standalone or CI usage and intentionally require
-`PROCESSOR_ARTIFACT_PATH`.
+These are separate operations:
+
+- `make deploy-dev` packages the processor, then creates or updates the development stack.
+- `make destroy-dev` deletes the development stack. It passes the test artifact only
+  because the shared CDK entry point requires an artifact path; it does not package or
+  deploy the processor.
+
+`make synth-real`, `make diff-dev`, and `make deploy-dev` package the processor
+automatically, then pass `3d-processor/artifacts/3d-processor.zip` to CDK. There is no
+manual ZIP creation, copying, or artifact-path configuration. Direct `npm run synth`,
+`npm run diff`, and `npm run deploy` remain available for standalone or CI usage and
+intentionally require `PROCESSOR_ARTIFACT_PATH`.
 
 The default sibling path can be overridden when repositories live elsewhere:
 
