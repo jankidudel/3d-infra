@@ -132,7 +132,9 @@ export class InfraStack extends Stack {
     ];
     if (alarmTopic) {
       const alarmAction = new SnsAction(alarmTopic);
-      for (const alarm of alarms) alarm.addAlarmAction(alarmAction);
+      for (const alarm of alarms) {
+        alarm.addAlarmAction(alarmAction);
+      }
     }
     Tags.of(this).add('Project', '3d-quality');
     Tags.of(this).add('Environment', props.stage);
