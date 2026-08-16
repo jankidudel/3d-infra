@@ -52,13 +52,22 @@ jobs:
         with:
           path: 3d-infra
 
+      - name: Verify component repository access token
+        env:
+          COMPONENT_REPOSITORIES_TOKEN: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN }}
+        run: |
+          if [ -z "$COMPONENT_REPOSITORIES_TOKEN" ]; then
+            echo "::error::COMPONENT_REPOSITORIES_TOKEN is not available. Add it as a 3d-infra repository secret or to the selected GitHub Environment."
+            exit 1
+          fi
+
       - name: Check out processor
         uses: actions/checkout@v6
         with:
           repository: jankidudel/3d-processor
           ref: ${{ inputs.processor_ref || 'main' }}
           path: 3d-processor
-          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN || github.token }}
+          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN }}
 
       - name: Check out API
         uses: actions/checkout@v6
@@ -66,7 +75,7 @@ jobs:
           repository: jankidudel/3d-api
           ref: ${{ inputs.api_ref || 'main' }}
           path: 3d-api
-          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN || github.token }}
+          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN }}
 
       - name: Check out frontend
         uses: actions/checkout@v6
@@ -74,7 +83,7 @@ jobs:
           repository: jankidudel/3d-frontend
           ref: ${{ inputs.frontend_ref || 'main' }}
           path: 3d-frontend
-          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN || github.token }}
+          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN }}
 
       - uses: actions/setup-node@v6
         with:
