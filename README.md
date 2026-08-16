@@ -12,7 +12,7 @@ Angular → Go API → presigned PUT → S3 uploads/
                                      DLQ
 ```
 
-The private S3 bucket uses S3-managed encryption, blocks public access, and expires uploads after one day and reports after seven days. The standard queue has a 720-second visibility timeout and a DLQ. The processor runs with 256 MB, a 120-second timeout, x86_64 architecture, batch size 1, and reserved concurrency 1 by default.
+The private S3 bucket uses S3-managed encryption, blocks public access, and expires uploads after one day and reports after seven days. The standard queue has a 720-second visibility timeout and a DLQ. The processor runs with 256 MB, a 120-second timeout, x86_64 architecture, batch size 1, and an SQS event-source maximum concurrency of 2 by default. Reserved concurrency is intentionally not configured because small account concurrency quotas may not leave AWS's required unreserved concurrency capacity.
 
 No database, API Gateway, frontend hosting, authentication, or application processing logic is included.
 
@@ -70,12 +70,14 @@ The artifact path is required by the CDK entry point for these direct commands. 
 wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and
 `npm run deploy -- -c stage=dev`.
 
-| Setting              | Context                 | Environment                      | Default                        |
-| -------------------- | ----------------------- | -------------------------------- | ------------------------------ |
-| Artifact             | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH`        | required                       |
-| Memory (MB)          | `processorMemory`       | `PROCESSOR_MEMORY_MB`            | `256`                          |
-| Reserved concurrency | `processorConcurrency`  | `PROCESSOR_RESERVED_CONCURRENCY` | `1`                            |
-| Browser origin       | `corsOrigin`            | `CORS_ORIGIN`                    | localhost in dev; none in prod |
+| Setting                          | Context                              | Environment                              | Default                        |
+| -------------------------------- | ------------------------------------ | ---------------------------------------- | ------------------------------ |
+| Artifact                         | `processorArtifactPath`              | `PROCESSOR_ARTIFACT_PATH`                | required                       |
+| Memory (MB)                      | `processorMemory`                    | `PROCESSOR_MEMORY_MB`                    | `256`                          |
+| Event-source maximum concurrency | `processorEventSourceMaxConcurrency` | `PROCESSOR_EVENT_SOURCE_MAX_CONCURRENCY` | `2`                            |
+| Browser origin                   | `corsOrigin`                         | `CORS_ORIGIN`                            | localhost in dev; none in prod |
+| Monthly budget (USD)             | `monthlyBudgetUsd`                   | `MONTHLY_BUDGET_USD`                     | `10` when alerts are enabled   |
+| Budget alert email               | `budgetAlertEmail`                   | `BUDGET_ALERT_EMAIL`                     | disabled when omitted          |
 
 For production, use `-c stage=prod` and explicitly set the production browser origin when needed. Production retains the bucket and its contents when the stack is deleted; development enables bucket cleanup. Review the CloudFormation diff and concurrency setting before every production deployment.
 
@@ -83,6 +85,12 @@ Processor logs use the same lifecycle policy in every stage. A newly created log
 deleted if its initial deployment rolls back, preventing an empty orphan from blocking a
 retry. Once successfully deployed, the log group and its diagnostic history are retained
 if the stack is deleted or the resource is replaced.
+
+Set `BUDGET_ALERT_EMAIL` to create a project-tag-filtered monthly AWS Budget with
+forecasted 50% and actual 80%/100% email notifications. AWS sends the notifications
+to that address after deployment; budget alerts report spend but do not automatically
+disable resources. The `Project` cost-allocation tag must be activated in the billing
+account for tag-filtered costs to appear in the budget.
 
 The stack outputs the bucket name, queue URL, DLQ URL, and processor function name.
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { App } from 'aws-cdk-lib';
 import { InfraStack } from '../lib/3d-infra-stack';
+import { MIN_EVENT_SOURCE_MAX_CONCURRENCY } from '../lib/constructs/processor-lambda';
 
 const app = new App();
 const stage = String(app.node.tryGetContext('stage') ?? process.env.STAGE ?? 'dev');
@@ -25,8 +26,15 @@ new InfraStack(app, `ThreeDInfra${stage}`, {
   stage,
   artifactPath,
   processorMemory: optionalNumber('processorMemory', 'PROCESSOR_MEMORY_MB'),
-  processorConcurrency:
-    optionalNumber('processorConcurrency', 'PROCESSOR_RESERVED_CONCURRENCY') ?? 1,
+  processorEventSourceMaxConcurrency:
+    optionalNumber(
+      'processorEventSourceMaxConcurrency',
+      'PROCESSOR_EVENT_SOURCE_MAX_CONCURRENCY',
+    ) ?? MIN_EVENT_SOURCE_MAX_CONCURRENCY, // @todo: move to env setting.
+  budgetAlertEmail:
+    String(app.node.tryGetContext('budgetAlertEmail') ?? process.env.BUDGET_ALERT_EMAIL ?? '') ||
+    undefined,
+  monthlyBudgetUsd: optionalNumber('monthlyBudgetUsd', 'MONTHLY_BUDGET_USD'),
   corsOrigin:
     String(
       app.node.tryGetContext('corsOrigin') ??

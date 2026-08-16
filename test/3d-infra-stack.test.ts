@@ -76,6 +76,32 @@ void test('creates the configured .NET processor and event mapping', () => {
   result.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
     BatchSize: 1,
     FunctionResponseTypes: ['ReportBatchItemFailures'],
+    ScalingConfig: { MaximumConcurrency: 2 },
+  });
+  result.hasResourceProperties('AWS::Lambda::Function', {
+    ReservedConcurrentExecutions: Match.absent(),
+  });
+});
+void test('creates an email-notified monthly budget when configured', () => {
+  const stack = new InfraStack(new App(), 'BudgetStack', {
+    stage: 'dev',
+    artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
+    budgetAlertEmail: 'owner@example.com',
+    monthlyBudgetUsd: 15,
+  });
+
+  Template.fromStack(stack).hasResourceProperties('AWS::Budgets::Budget', {
+    Budget: {
+      BudgetLimit: { Amount: 15, Unit: 'USD' },
+      BudgetType: 'COST',
+      TimeUnit: 'MONTHLY',
+    },
+    NotificationsWithSubscribers: Match.arrayWith([
+      Match.objectLike({
+        Notification: Match.objectLike({ Threshold: 80, NotificationType: 'ACTUAL' }),
+        Subscribers: [{ Address: 'owner@example.com', SubscriptionType: 'EMAIL' }],
+      }),
+    ]),
   });
 });
 

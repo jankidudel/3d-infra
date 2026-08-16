@@ -1,4 +1,5 @@
 import { CfnOutput, Stack, StackProps, Tags } from 'aws-cdk-lib';
+import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { SqsDestination } from 'aws-cdk-lib/aws-s3-notifications';
@@ -12,7 +13,9 @@ export interface InfraStackProps extends StackProps {
   readonly artifactPath: string;
   readonly corsOrigin?: string;
   readonly processorMemory?: number;
-  readonly processorConcurrency?: number;
+  readonly processorEventSourceMaxConcurrency?: number;
+  readonly budgetAlertEmail?: string;
+  readonly monthlyBudgetUsd?: number;
 }
 
 export class InfraStack extends Stack {
@@ -29,7 +32,7 @@ export class InfraStack extends Stack {
       queue: processing.queue,
       artifactPath: props.artifactPath,
       memorySize: props.processorMemory,
-      reservedConcurrency: props.processorConcurrency,
+      eventSourceMaxConcurrency: props.processorEventSourceMaxConcurrency,
       logRetention: RetentionDays.ONE_WEEK,
     });
     storage.bucket.addEventNotification(
@@ -40,6 +43,46 @@ export class InfraStack extends Stack {
     Tags.of(this).add('Project', '3d-quality');
     Tags.of(this).add('Environment', props.stage);
     Tags.of(this).add('ManagedBy', 'CDK');
+    if (props.budgetAlertEmail) {
+      new CfnBudget(this, 'MonthlyCostBudget', {
+        budget: {
+          budgetName: `3d-quality-${props.stage}-monthly`,
+          budgetType: 'COST',
+          timeUnit: 'MONTHLY',
+          budgetLimit: { amount: props.monthlyBudgetUsd ?? 10, unit: 'USD' },
+          costFilters: { TagKeyValue: [`user:Project$3d-quality`] },
+        },
+        notificationsWithSubscribers: [
+          {
+            notification: {
+              comparisonOperator: 'GREATER_THAN',
+              notificationType: 'FORECASTED',
+              threshold: 50,
+              thresholdType: 'PERCENTAGE',
+            },
+            subscribers: [{ address: props.budgetAlertEmail, subscriptionType: 'EMAIL' }],
+          },
+          {
+            notification: {
+              comparisonOperator: 'GREATER_THAN',
+              notificationType: 'ACTUAL',
+              threshold: 80,
+              thresholdType: 'PERCENTAGE',
+            },
+            subscribers: [{ address: props.budgetAlertEmail, subscriptionType: 'EMAIL' }],
+          },
+          {
+            notification: {
+              comparisonOperator: 'GREATER_THAN',
+              notificationType: 'ACTUAL',
+              threshold: 100,
+              thresholdType: 'PERCENTAGE',
+            },
+            subscribers: [{ address: props.budgetAlertEmail, subscriptionType: 'EMAIL' }],
+          },
+        ],
+      });
+    }
     new CfnOutput(this, 'StorageBucketName', { value: storage.bucket.bucketName });
     new CfnOutput(this, 'ProcessingQueueUrl', { value: processing.queue.queueUrl });
     new CfnOutput(this, 'ProcessingDeadLetterQueueUrl', {

@@ -14,14 +14,26 @@ export interface ProcessorLambdaProps {
   readonly queue: Queue;
   readonly artifactPath: string;
   readonly memorySize?: number;
-  readonly reservedConcurrency?: number;
+  readonly eventSourceMaxConcurrency?: number;
   readonly logRetention?: RetentionDays;
 }
+
+export const MIN_EVENT_SOURCE_MAX_CONCURRENCY = 2;
+const MAX_EVENT_SOURCE_MAX_CONCURRENCY = 1000;
 
 export class ProcessorLambda extends Construct {
   public readonly function: LambdaFunction;
   public constructor(scope: Construct, id: string, props: ProcessorLambdaProps) {
     super(scope, id);
+    const eventSourceMaxConcurrency = props.eventSourceMaxConcurrency ?? 2;
+    if (
+      eventSourceMaxConcurrency < MIN_EVENT_SOURCE_MAX_CONCURRENCY ||
+      eventSourceMaxConcurrency > MAX_EVENT_SOURCE_MAX_CONCURRENCY
+    ) {
+      throw new Error(
+        `Processor event-source maximum concurrency must be between ${MIN_EVENT_SOURCE_MAX_CONCURRENCY} and ${MAX_EVENT_SOURCE_MAX_CONCURRENCY}`,
+      );
+    }
     const functionName = `3d-processor-${props.stage}`;
     const logGroup = new LogGroup(this, 'LogGroup', {
       logGroupName: `/aws/lambda/${functionName}`,
@@ -36,7 +48,6 @@ export class ProcessorLambda extends Construct {
       code: Code.fromAsset(props.artifactPath),
       memorySize: props.memorySize ?? 256,
       timeout: Duration.seconds(PROCESSOR_TIMEOUT_SECONDS),
-      // reservedConcurrentExecutions: props.reservedConcurrency ?? 1, // @todo: review, can't be done right now, not enabled on AWS for new accounts.
       environment: { STORAGE_BUCKET_NAME: props.bucket.bucketName, UPLOADS_PREFIX, REPORTS_PREFIX },
       logGroup,
     });
@@ -46,7 +57,7 @@ export class ProcessorLambda extends Construct {
       new SqsEventSource(props.queue, {
         batchSize: 1,
         reportBatchItemFailures: true,
-        maxConcurrency: 2, // This is the maximum number of concurrent Lambda invocations for this event source. Adjust as needed. Done because we can't limit number of reservedConcurrentExecutions on lambda itself.
+        maxConcurrency: eventSourceMaxConcurrency,
       }),
     );
   }
