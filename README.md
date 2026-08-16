@@ -160,5 +160,54 @@ make deploy-dev \
   FRONTEND_DIR=/absolute/path/to/3d-frontend
 ```
 
+## GitHub deployment
+
+`.github/workflows/deploy.yml` provides continuous deployment without storing
+long-lived AWS access keys. A push to `3d-infra/main` verifies all four repositories
+and deploys the `dev` stage. The workflow can also be started manually with
+`workflow_dispatch`; manual runs can select `dev` or `production` and a branch, tag,
+or commit for each application repository. Production uses the CDK stage name `prod`.
+
+The workflow checks out `main` from each application repository for an automatic dev
+deployment. A change pushed only to an application repository does not trigger this
+infrastructure workflow. Until cross-repository release dispatch is added, start the
+deployment manually after such a change or update `3d-infra/main` as part of the
+coordinated release.
+
+Configure these GitHub Environments in the `3d-infra` repository:
+
+- `dev` — optionally require reviewer approval while the deployment is new.
+- `production` — require reviewer approval and restrict which branches may deploy.
+
+Set the following environment variables in both environments as appropriate:
+
+| GitHub environment value | Kind     | Purpose                                                            |
+| ------------------------ | -------- | ------------------------------------------------------------------ |
+| `AWS_DEPLOY_ROLE_ARN`    | Variable | IAM role assumed through GitHub OIDC                               |
+| `AWS_ACCOUNT_ID`         | Variable | Expected AWS account; prevents accidental cross-account deployment |
+| `MONTHLY_BUDGET_USD`     | Variable | Monthly project budget; for example `10`                           |
+| `CORS_ORIGIN`            | Variable | Allowed upload origin; `*` is the current development default      |
+| `BUDGET_ALERT_EMAIL`     | Secret   | Recipient for AWS Budget notifications                             |
+| `OPERATIONS_ALERT_EMAIL` | Secret   | Recipient for CloudWatch alarm notifications                       |
+
+If the component repositories are public, the workflow's normal GitHub token can read
+them. If any are private, create `COMPONENT_REPOSITORIES_TOKEN` as an environment secret
+using a fine-grained token or GitHub App token with read-only Contents access to
+`3d-processor`, `3d-api`, and `3d-frontend`.
+
+In AWS, create the GitHub OIDC provider for
+`https://token.actions.githubusercontent.com` with audience `sts.amazonaws.com`, then
+create a deployment role whose trust policy is restricted to this repository and the
+`dev`/`production` GitHub environments. Grant that role only the CDK bootstrap and
+CloudFormation deployment permissions required by this stack. The workflow's
+`id-token: write` permission lets it request a signed GitHub identity token; AWS STS
+validates the token and returns temporary credentials for that workflow run. GitHub
+does not store a permanent AWS access key.
+
+GitHub Environment approval rules and the AWS OIDC provider/role are one-time external
+settings and are deliberately not created by the application stack it will deploy.
+Creating the deployment role from the deployable stack would introduce a bootstrap
+dependency and allow that stack to modify its own deployment identity.
+
 `npm install` configures Git to use the tracked `.githooks` directory. Every commit then
 runs the same `npm run precommit` checks automatically.

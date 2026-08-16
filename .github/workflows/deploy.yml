@@ -1,0 +1,148 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub environment and AWS stage to deploy
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - production
+      processor_ref:
+        description: 3d-processor branch, tag, or commit
+        required: true
+        default: main
+      api_ref:
+        description: 3d-api branch, tag, or commit
+        required: true
+        default: main
+      frontend_ref:
+        description: 3d-frontend branch, tag, or commit
+        required: true
+        default: main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment || 'dev' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+    env:
+      AWS_REGION: us-east-1
+      STAGE: ${{ (inputs.environment || 'dev') == 'production' && 'prod' || 'dev' }}
+      BUDGET_ALERT_EMAIL: ${{ secrets.BUDGET_ALERT_EMAIL }}
+      OPERATIONS_ALERT_EMAIL: ${{ secrets.OPERATIONS_ALERT_EMAIL }}
+      MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
+      CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
+    steps:
+      - name: Check out infrastructure
+        uses: actions/checkout@v4
+        with:
+          path: 3d-infra
+
+      - name: Check out processor
+        uses: actions/checkout@v4
+        with:
+          repository: jankidudel/3d-processor
+          ref: ${{ inputs.processor_ref || 'main' }}
+          path: 3d-processor
+          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN || github.token }}
+
+      - name: Check out API
+        uses: actions/checkout@v4
+        with:
+          repository: jankidudel/3d-api
+          ref: ${{ inputs.api_ref || 'main' }}
+          path: 3d-api
+          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN || github.token }}
+
+      - name: Check out frontend
+        uses: actions/checkout@v4
+        with:
+          repository: jankidudel/3d-frontend
+          ref: ${{ inputs.frontend_ref || 'main' }}
+          path: 3d-frontend
+          token: ${{ secrets.COMPONENT_REPOSITORIES_TOKEN || github.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            3d-infra/package-lock.json
+            3d-frontend/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 3d-api/go.mod
+          cache-dependency-path: 3d-api/go.sum
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install infrastructure dependencies
+        working-directory: 3d-infra
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: 3d-frontend
+        run: npm ci
+
+      - name: Install Lambda packaging tool
+        run: dotnet tool install --global Amazon.Lambda.Tools --version 7.0.0
+
+      - name: Verify infrastructure
+        working-directory: 3d-infra
+        run: npm run precommit
+
+      - name: Verify processor
+        working-directory: 3d-processor
+        run: dotnet test 3d-processor.slnx --nologo
+
+      - name: Verify API
+        working-directory: 3d-api
+        run: make check
+
+      - name: Verify frontend
+        working-directory: 3d-frontend
+        run: npm run verify
+
+      - name: Build deployment artifacts
+        working-directory: 3d-infra
+        run: make application-artifacts
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+
+      - name: Show CloudFormation changes
+        working-directory: 3d-infra
+        run: |
+          PROCESSOR_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-processor/artifacts/3d-processor.zip" \
+          API_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-api/artifacts/3d-api.zip" \
+          FRONTEND_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-frontend/dist/3d-frontend/browser" \
+          npx cdk diff -c stage="$STAGE"
+
+      - name: Deploy with CDK
+        working-directory: 3d-infra
+        run: |
+          PROCESSOR_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-processor/artifacts/3d-processor.zip" \
+          API_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-api/artifacts/3d-api.zip" \
+          FRONTEND_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-frontend/dist/3d-frontend/browser" \
+          npx cdk deploy -c stage="$STAGE" --require-approval never --outputs-file cdk-outputs.json
