@@ -5,14 +5,14 @@ AWS CDK v2 infrastructure for the 3d-quality processing pipeline. This repositor
 ## Architecture
 
 ```text
-Angular → Go API → presigned PUT → S3 jobs/{jobId}/input.stl
+Angular → Go API → presigned POST → S3 jobs/{jobId}/input.stl
                                                 ↓ object-created event
                                                SQS → .NET 10 Lambda
                                                 ↓             ↓
                                                DLQ   jobs/{jobId}/report.json
 ```
 
-The private S3 bucket uses S3-managed encryption, blocks public access, and expires complete job subtrees after seven days. The standard queue has a 720-second visibility timeout and a DLQ. The processor runs with 256 MB, a 120-second timeout, x86_64 architecture, batch size 1, and a fixed SQS event-source maximum concurrency of 2. Reserved concurrency is intentionally not configured because small account concurrency quotas may not leave AWS's required unreserved concurrency capacity.
+The private S3 bucket uses S3-managed encryption, blocks public access, and expires complete job subtrees after one day. The standard queue has a 720-second visibility timeout and a DLQ. The processor runs with 256 MB, a 120-second timeout, x86_64 architecture, batch size 1, and a fixed SQS event-source maximum concurrency of 2. Reserved concurrency is intentionally not configured because small account concurrency quotas may not leave AWS's required unreserved concurrency capacity.
 
 No database or authentication is introduced. Job metadata, inputs, reports, and
 terminal failure results live in S3. The Go API runs in Lambda behind a throttled
@@ -90,7 +90,7 @@ wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`
 | Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted |
 
 For production, use `-c stage=prod` and set `CORS_ORIGIN` to a known custom frontend
-domain when available. The default `*` permits browser use of a scoped presigned PUT URL;
+domain when available. The default `*` permits browser use of a scoped presigned POST form;
 it does not make the bucket public or authorize unsigned requests. Production retains the
 bucket and its contents when the stack is deleted; development enables bucket cleanup.
 Review the CloudFormation diff before every production deployment.

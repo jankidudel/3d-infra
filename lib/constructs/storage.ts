@@ -29,13 +29,13 @@ export class Storage extends Construct {
         {
           id: 'ExpireJobs',
           prefix: JOBS_PREFIX,
-          expiration: Duration.days(props.jobsRetentionDays ?? 7),
+          expiration: Duration.days(props.jobsRetentionDays ?? 1),
         },
       ],
       cors: props.corsOrigin
         ? [
             {
-              allowedMethods: [HttpMethods.PUT],
+              allowedMethods: [HttpMethods.POST],
               allowedOrigins: [props.corsOrigin],
               allowedHeaders: ['*'],
             },

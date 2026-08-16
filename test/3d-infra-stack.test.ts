@@ -40,7 +40,7 @@ void test('creates secure storage with lifecycle policies', () => {
     },
     LifecycleConfiguration: {
       Rules: Match.arrayWith([
-        Match.objectLike({ Prefix: 'jobs/', ExpirationInDays: 7, Status: 'Enabled' }),
+        Match.objectLike({ Prefix: 'jobs/', ExpirationInDays: 1, Status: 'Enabled' }),
       ]),
     },
   });
