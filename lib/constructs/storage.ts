@@ -2,14 +2,14 @@ import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-export const UPLOADS_PREFIX = 'uploads/';
-export const REPORTS_PREFIX = 'reports/';
+export const JOBS_PREFIX = 'jobs/';
+export const JOB_INPUT_SUFFIX = '/input.stl';
+export const JOB_REPORT_SUFFIX = '/report.json';
 
 export interface StorageProps {
   readonly stage: string;
   readonly corsOrigin?: string;
-  readonly uploadsRetentionDays?: number;
-  readonly reportsRetentionDays?: number;
+  readonly jobsRetentionDays?: number;
 }
 
 export class Storage extends Construct {
@@ -27,14 +27,9 @@ export class Storage extends Construct {
       autoDeleteObjects: isDev,
       lifecycleRules: [
         {
-          id: 'ExpireUploads',
-          prefix: UPLOADS_PREFIX,
-          expiration: Duration.days(props.uploadsRetentionDays ?? 1),
-        },
-        {
-          id: 'ExpireReports',
-          prefix: REPORTS_PREFIX,
-          expiration: Duration.days(props.reportsRetentionDays ?? 7),
+          id: 'ExpireJobs',
+          prefix: JOBS_PREFIX,
+          expiration: Duration.days(props.jobsRetentionDays ?? 7),
         },
       ],
       cors: props.corsOrigin

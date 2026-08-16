@@ -5,16 +5,19 @@ AWS CDK v2 infrastructure for the 3d-quality processing pipeline. This repositor
 ## Architecture
 
 ```text
-Angular → Go API → presigned PUT → S3 uploads/
-                                      ↓ object-created event
-                                     SQS → .NET 10 Lambda → S3 reports/
-                                      ↓
-                                     DLQ
+Angular → Go API → presigned PUT → S3 jobs/{jobId}/input.stl
+                                                ↓ object-created event
+                                               SQS → .NET 10 Lambda
+                                                ↓             ↓
+                                               DLQ   jobs/{jobId}/report.json
 ```
 
-The private S3 bucket uses S3-managed encryption, blocks public access, and expires uploads after one day and reports after seven days. The standard queue has a 720-second visibility timeout and a DLQ. The processor runs with 256 MB, a 120-second timeout, x86_64 architecture, batch size 1, and an SQS event-source maximum concurrency of 2 by default. Reserved concurrency is intentionally not configured because small account concurrency quotas may not leave AWS's required unreserved concurrency capacity.
+The private S3 bucket uses S3-managed encryption, blocks public access, and expires complete job subtrees after seven days. The standard queue has a 720-second visibility timeout and a DLQ. The processor runs with 256 MB, a 120-second timeout, x86_64 architecture, batch size 1, and a fixed SQS event-source maximum concurrency of 2. Reserved concurrency is intentionally not configured because small account concurrency quotas may not leave AWS's required unreserved concurrency capacity.
 
-No database, API Gateway, frontend hosting, authentication, or application processing logic is included.
+No database or authentication is introduced. Job metadata, inputs, reports, and
+terminal failure results live in S3. The Go API runs in Lambda behind a throttled
+HTTP API. CloudFront serves the private frontend bucket and proxies `/api/*` to
+API Gateway.
 
 ## Prerequisites and bootstrap
 
@@ -22,7 +25,7 @@ No database, API Gateway, frontend hosting, authentication, or application proce
 - AWS CLI credentials for the target account
 - AWS CDK v2 (provided as a local development dependency)
 - Node.js 22 or newer for the built-in test runner
-- A packaged Lambda artifact built by `3d-processor`
+- Packaged processor and API Lambda artifacts plus the frontend browser build
 
 The default region is `us-east-1`; account IDs are read from the active AWS credentials.
 
@@ -31,19 +34,22 @@ npm install
 AWS_PROFILE=your-profile make bootstrap
 ```
 
-The placeholder artifact is supplied because this repository validates the processor
-artifact whenever CDK loads the app, including during `cdk bootstrap`. Bootstrap creates
-only the regional CDK support stack; it does not deploy this placeholder processor. The
+Test placeholders are supplied because this repository validates application artifact
+paths whenever CDK loads the app, including during `cdk bootstrap`. Bootstrap creates
+only the regional CDK support stack; it does not deploy the placeholders. The
 Make target obtains the account ID from the active AWS credentials and defaults to
 `us-east-1`. Override the region with `AWS_REGION=...` if needed.
 
-## Processor artifact boundary
+## Application artifact boundary
 
-`3d-processor` owns build, test, and packaging. It produces a Lambda-ready ZIP file or asset directory. `3d-infra` receives that artifact and deploys it; CDK does not compile C#.
+Each application repository owns its build artifact. `3d-processor` and `3d-api`
+produce Lambda ZIP files; `3d-frontend` produces a static browser directory.
+`3d-infra` receives and deploys those artifacts without compiling application code.
 
 ```bash
 export PROCESSOR_ARTIFACT_PATH=/absolute/path/to/processor.zip
-# or append: -c processorArtifactPath=/absolute/path/to/processor.zip
+export API_ARTIFACT_PATH=/absolute/path/to/3d-api.zip
+export FRONTEND_ARTIFACT_PATH=/absolute/path/to/frontend/browser
 ```
 
 The configured handler is `Processor::Processor.Function::FunctionHandler`: the
@@ -60,26 +66,34 @@ npm test
 npm run format:check
 npm run lint
 export PROCESSOR_ARTIFACT_PATH=/absolute/path/to/processor.zip
+export API_ARTIFACT_PATH=/absolute/path/to/3d-api.zip
+export FRONTEND_ARTIFACT_PATH=/absolute/path/to/frontend/browser
 npx cdk synth -c stage=dev
 npx cdk diff -c stage=dev
 npx cdk deploy -c stage=dev
 npx cdk destroy -c stage=dev
 ```
 
-The artifact path is required by the CDK entry point for these direct commands. The npm
+All three artifact paths are required by the CDK entry point for these direct commands. The npm
 wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and
 `npm run deploy -- -c stage=dev`.
 
-| Setting                          | Context                              | Environment                              | Default                        |
-| -------------------------------- | ------------------------------------ | ---------------------------------------- | ------------------------------ |
-| Artifact                         | `processorArtifactPath`              | `PROCESSOR_ARTIFACT_PATH`                | required                       |
-| Memory (MB)                      | `processorMemory`                    | `PROCESSOR_MEMORY_MB`                    | `256`                          |
-| Event-source maximum concurrency | `processorEventSourceMaxConcurrency` | `PROCESSOR_EVENT_SOURCE_MAX_CONCURRENCY` | `2`                            |
-| Browser origin                   | `corsOrigin`                         | `CORS_ORIGIN`                            | localhost in dev; none in prod |
-| Monthly budget (USD)             | `monthlyBudgetUsd`                   | `MONTHLY_BUDGET_USD`                     | `10` when alerts are enabled   |
-| Budget alert email               | `budgetAlertEmail`                   | `BUDGET_ALERT_EMAIL`                     | disabled when omitted          |
+| Setting                | Context                 | Environment               | Default                           |
+| ---------------------- | ----------------------- | ------------------------- | --------------------------------- |
+| Processor artifact     | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH` | required                          |
+| API artifact           | `apiArtifactPath`       | `API_ARTIFACT_PATH`       | required                          |
+| Frontend artifact      | `frontendArtifactPath`  | `FRONTEND_ARTIFACT_PATH`  | required                          |
+| Memory (MB)            | `processorMemory`       | `PROCESSOR_MEMORY_MB`     | `256`                             |
+| Browser upload origin  | `corsOrigin`            | `CORS_ORIGIN`             | `*`                               |
+| Monthly budget (USD)   | `monthlyBudgetUsd`      | `MONTHLY_BUDGET_USD`      | `10` when alerts are enabled      |
+| Budget alert email     | `budgetAlertEmail`      | `BUDGET_ALERT_EMAIL`      | disabled when omitted             |
+| Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted |
 
-For production, use `-c stage=prod` and explicitly set the production browser origin when needed. Production retains the bucket and its contents when the stack is deleted; development enables bucket cleanup. Review the CloudFormation diff and concurrency setting before every production deployment.
+For production, use `-c stage=prod` and set `CORS_ORIGIN` to a known custom frontend
+domain when available. The default `*` permits browser use of a scoped presigned PUT URL;
+it does not make the bucket public or authorize unsigned requests. Production retains the
+bucket and its contents when the stack is deleted; development enables bucket cleanup.
+Review the CloudFormation diff before every production deployment.
 
 Processor logs use the same lifecycle policy in every stage. A newly created log group is
 deleted if its initial deployment rolls back, preventing an empty orphan from blocking a
@@ -92,7 +106,14 @@ to that address after deployment; budget alerts report spend but do not automati
 disable resources. The `Project` cost-allocation tag must be activated in the billing
 account for tag-filtered costs to appear in the budget.
 
-The stack outputs the bucket name, queue URL, DLQ URL, and processor function name.
+Seven standard-resolution CloudWatch alarms monitor processor errors, throttles,
+near-timeout duration, queue age, DLQ messages, API errors, and API Gateway 5xx
+responses. Set `OPERATIONS_ALERT_EMAIL`
+to route them through an SNS email subscription. AWS sends a confirmation message;
+the recipient must confirm the subscription before operational emails are delivered.
+
+The stack outputs storage and queue identifiers, Lambda names, the API URL, and
+the CloudFront frontend URL.
 
 ## Code quality and pre-commit checks
 
@@ -108,8 +129,7 @@ artifact. It is included in the pre-commit checks and never deploys anything.
 
 ## Simplified workspace deployment
 
-When this repository is checked out beside `3d-processor`, use its versioned
-Makefile:
+When all application repositories are checked out as siblings, use the versioned Makefile:
 
 ```sh
 make bootstrap
@@ -122,21 +142,22 @@ make destroy-dev
 
 These are separate operations:
 
-- `make deploy-dev` packages the processor, then creates or updates the development stack.
-- `make destroy-dev` deletes the development stack. It passes the test artifact only
-  because the shared CDK entry point requires an artifact path; it does not package or
-  deploy the processor.
+- `make deploy-dev` builds all three applications, then creates or updates the development stack.
+- `make destroy-dev` deletes the development stack. It passes test artifacts only because
+  the shared CDK entry point validates artifact paths; it does not build applications.
 
-`make synth-real`, `make diff-dev`, and `make deploy-dev` package the processor
-automatically, then pass `3d-processor/artifacts/3d-processor.zip` to CDK. There is no
-manual ZIP creation, copying, or artifact-path configuration. Direct `npm run synth`,
-`npm run diff`, and `npm run deploy` remain available for standalone or CI usage and
-intentionally require `PROCESSOR_ARTIFACT_PATH`.
+`make synth-real`, `make diff-dev`, and `make deploy-dev` build all application artifacts
+and pass them to CDK. There is no manual ZIP creation or copying. Direct npm commands
+remain available for standalone or CI usage and intentionally require all three artifact
+path variables.
 
 The default sibling path can be overridden when repositories live elsewhere:
 
 ```sh
-make deploy-dev PROCESSOR_DIR=/absolute/path/to/3d-processor
+make deploy-dev \
+  PROCESSOR_DIR=/absolute/path/to/3d-processor \
+  API_DIR=/absolute/path/to/3d-api \
+  FRONTEND_DIR=/absolute/path/to/3d-frontend
 ```
 
 `npm install` configures Git to use the tracked `.githooks` directory. Every commit then

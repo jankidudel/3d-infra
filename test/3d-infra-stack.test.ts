@@ -4,10 +4,15 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { InfraStack } from '../lib/3d-infra-stack';
 
+const apiArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'api');
+const frontendArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'frontend');
+
 function template(stage = 'dev'): Template {
   const stack = new InfraStack(new App(), 'TestStack', {
     stage,
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
+    apiArtifactPath,
+    frontendArtifactPath,
     corsOrigin: 'http://localhost:4200',
   });
   return Template.fromStack(stack);
@@ -35,8 +40,7 @@ void test('creates secure storage with lifecycle policies', () => {
     },
     LifecycleConfiguration: {
       Rules: Match.arrayWith([
-        Match.objectLike({ Prefix: 'uploads/', ExpirationInDays: 1, Status: 'Enabled' }),
-        Match.objectLike({ Prefix: 'reports/', ExpirationInDays: 7, Status: 'Enabled' }),
+        Match.objectLike({ Prefix: 'jobs/', ExpirationInDays: 7, Status: 'Enabled' }),
       ]),
     },
   });
@@ -68,8 +72,7 @@ void test('creates the configured .NET processor and event mapping', () => {
     Environment: {
       Variables: {
         STORAGE_BUCKET_NAME: Match.anyValue(),
-        UPLOADS_PREFIX: 'uploads/',
-        REPORTS_PREFIX: 'reports/',
+        JOBS_PREFIX: 'jobs/',
       },
     },
   });
@@ -86,6 +89,8 @@ void test('creates an email-notified monthly budget when configured', () => {
   const stack = new InfraStack(new App(), 'BudgetStack', {
     stage: 'dev',
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
+    apiArtifactPath,
+    frontendArtifactPath,
     budgetAlertEmail: 'owner@example.com',
     monthlyBudgetUsd: 15,
   });
@@ -105,16 +110,77 @@ void test('creates an email-notified monthly budget when configured', () => {
   });
 });
 
-void test('routes only uploads object-created events to SQS', () => {
+void test('routes only job input object-created events to SQS', () => {
   template().hasResourceProperties('Custom::S3BucketNotifications', {
     NotificationConfiguration: {
       QueueConfigurations: [
         Match.objectLike({
           Events: ['s3:ObjectCreated:*'],
-          Filter: { Key: { FilterRules: [{ Name: 'prefix', Value: 'uploads/' }] } },
+          Filter: {
+            Key: {
+              FilterRules: [
+                { Name: 'suffix', Value: '/input.stl' },
+                { Name: 'prefix', Value: 'jobs/' },
+              ],
+            },
+          },
           QueueArn: Match.anyValue(),
         }),
       ],
     },
+  });
+});
+
+void test('creates seven operational alarms and optional email notifications', () => {
+  const stack = new InfraStack(new App(), 'AlarmStack', {
+    stage: 'dev',
+    artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
+    apiArtifactPath,
+    frontendArtifactPath,
+    operationsAlertEmail: 'operations@example.com',
+  });
+  const result = Template.fromStack(stack);
+
+  result.resourceCountIs('AWS::CloudWatch::Alarm', 7);
+  result.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    AlarmName: '3d-processing-dlq-messages-dev',
+    Threshold: 1,
+    TreatMissingData: 'notBreaching',
+  });
+  result.hasResourceProperties('AWS::SNS::Subscription', {
+    Protocol: 'email',
+    Endpoint: 'operations@example.com',
+  });
+});
+
+void test('creates a throttled HTTP API Lambda with scoped storage access', () => {
+  const result = template();
+  result.hasResourceProperties('AWS::Lambda::Function', {
+    FunctionName: '3d-api-dev',
+    Runtime: 'provided.al2023',
+    Handler: 'bootstrap',
+    MemorySize: 128,
+    Timeout: 15,
+    Environment: { Variables: { S3_BUCKET: Match.anyValue() } },
+  });
+  result.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+    StageName: '$default',
+    AutoDeploy: true,
+    DefaultRouteSettings: {
+      ThrottlingBurstLimit: 10,
+      ThrottlingRateLimit: 5,
+    },
+  });
+});
+
+void test('creates private static hosting behind CloudFront with API routing', () => {
+  const result = template();
+  result.hasResourceProperties('AWS::CloudFront::Distribution', {
+    DistributionConfig: Match.objectLike({
+      DefaultRootObject: 'index.html',
+      CacheBehaviors: Match.arrayWith([
+        Match.objectLike({ PathPattern: 'api/*', ViewerProtocolPolicy: 'https-only' }),
+      ]),
+    }),
   });
 });

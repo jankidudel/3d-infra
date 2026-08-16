@@ -1,21 +1,29 @@
-import { CfnOutput, Stack, StackProps, Tags } from 'aws-cdk-lib';
+import { CfnOutput, Duration, Stack, StackProps, Tags } from 'aws-cdk-lib';
 import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
+import { Alarm, ComparisonOperator, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { SqsDestination } from 'aws-cdk-lib/aws-s3-notifications';
+import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
+import { Topic } from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
-import { ProcessingQueue } from './constructs/processing-queue';
+import { ProcessingQueue, PROCESSOR_TIMEOUT_SECONDS } from './constructs/processing-queue';
 import { ProcessorLambda } from './constructs/processor-lambda';
-import { Storage, UPLOADS_PREFIX } from './constructs/storage';
+import { JOB_INPUT_SUFFIX, JOBS_PREFIX, Storage } from './constructs/storage';
+import { ApiService } from './constructs/api-service';
+import { FrontendHosting } from './constructs/frontend-hosting';
 
 export interface InfraStackProps extends StackProps {
   readonly stage: string;
   readonly artifactPath: string;
+  readonly apiArtifactPath: string;
+  readonly frontendArtifactPath: string;
   readonly corsOrigin?: string;
   readonly processorMemory?: number;
-  readonly processorEventSourceMaxConcurrency?: number;
   readonly budgetAlertEmail?: string;
   readonly monthlyBudgetUsd?: number;
+  readonly operationsAlertEmail?: string;
 }
 
 export class InfraStack extends Stack {
@@ -32,14 +40,100 @@ export class InfraStack extends Stack {
       queue: processing.queue,
       artifactPath: props.artifactPath,
       memorySize: props.processorMemory,
-      eventSourceMaxConcurrency: props.processorEventSourceMaxConcurrency,
       logRetention: RetentionDays.ONE_WEEK,
     });
     storage.bucket.addEventNotification(
       EventType.OBJECT_CREATED,
       new SqsDestination(processing.queue),
-      { prefix: UPLOADS_PREFIX },
+      { prefix: JOBS_PREFIX, suffix: JOB_INPUT_SUFFIX },
     );
+    const api = new ApiService(this, 'Api', {
+      stage: props.stage,
+      bucket: storage.bucket,
+      artifactPath: props.apiArtifactPath,
+    });
+    const frontend = new FrontendHosting(this, 'Frontend', {
+      stage: props.stage,
+      artifactPath: props.frontendArtifactPath,
+      api,
+    });
+    const alarmTopic = props.operationsAlertEmail
+      ? new Topic(this, 'OperationsAlarmTopic', {
+          topicName: `3d-quality-operations-${props.stage}`,
+        })
+      : undefined;
+    if (alarmTopic && props.operationsAlertEmail) {
+      alarmTopic.addSubscription(new EmailSubscription(props.operationsAlertEmail));
+    }
+    const alarms = [
+      new Alarm(this, 'ProcessorErrorsAlarm', {
+        alarmName: `3d-processor-errors-${props.stage}`,
+        metric: processor.function.metricErrors({ period: Duration.minutes(5) }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
+      new Alarm(this, 'ProcessorThrottlesAlarm', {
+        alarmName: `3d-processor-throttles-${props.stage}`,
+        metric: processor.function.metricThrottles({ period: Duration.minutes(5) }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
+      new Alarm(this, 'ProcessorDurationAlarm', {
+        alarmName: `3d-processor-duration-${props.stage}`,
+        metric: processor.function.metricDuration({
+          period: Duration.minutes(5),
+          statistic: 'Maximum',
+        }),
+        threshold: PROCESSOR_TIMEOUT_SECONDS * 1000 * 0.9,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
+      new Alarm(this, 'ProcessingQueueAgeAlarm', {
+        alarmName: `3d-processing-queue-age-${props.stage}`,
+        metric: processing.queue.metricApproximateAgeOfOldestMessage({
+          period: Duration.minutes(5),
+        }),
+        threshold: PROCESSOR_TIMEOUT_SECONDS * 5,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
+      new Alarm(this, 'ProcessingDeadLetterQueueAlarm', {
+        alarmName: `3d-processing-dlq-messages-${props.stage}`,
+        metric: processing.deadLetterQueue.metricApproximateNumberOfMessagesVisible({
+          period: Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
+      new Alarm(this, 'ApiErrorsAlarm', {
+        alarmName: `3d-api-errors-${props.stage}`,
+        metric: api.function.metricErrors({ period: Duration.minutes(5) }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
+      new Alarm(this, 'ApiGatewayServerErrorsAlarm', {
+        alarmName: `3d-api-gateway-5xx-${props.stage}`,
+        metric: api.stage.metricServerError({ period: Duration.minutes(5) }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
+    ];
+    if (alarmTopic) {
+      const alarmAction = new SnsAction(alarmTopic);
+      for (const alarm of alarms) alarm.addAlarmAction(alarmAction);
+    }
     Tags.of(this).add('Project', '3d-quality');
     Tags.of(this).add('Environment', props.stage);
     Tags.of(this).add('ManagedBy', 'CDK');
@@ -89,5 +183,12 @@ export class InfraStack extends Stack {
       value: processing.deadLetterQueue.queueUrl,
     });
     new CfnOutput(this, 'ProcessorFunctionName', { value: processor.function.functionName });
+    new CfnOutput(this, 'ApiUrl', { value: api.stage.url });
+    new CfnOutput(this, 'FrontendUrl', {
+      value: `https://${frontend.distribution.distributionDomainName}`,
+    });
+    if (alarmTopic) {
+      new CfnOutput(this, 'OperationsAlarmTopicArn', { value: alarmTopic.topicArn });
+    }
   }
 }
