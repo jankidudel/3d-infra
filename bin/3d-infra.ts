@@ -22,15 +22,19 @@ function requiredArtifact(contextKey: string, environmentKey: string): string {
   return value;
 }
 
-function optionalNumber(contextKey: string, environmentKey: string): number | undefined {
+function optionalNumber(
+  contextKey: string,
+  environmentKey: string,
+  options: { integer?: boolean } = { integer: true },
+): number | undefined {
   const contextValue: unknown = app.node.tryGetContext(contextKey);
   const raw = contextValue ?? process.env[environmentKey];
   if (raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
     return undefined;
   }
   const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw new Error(`${contextKey} must be a positive integer`);
+  if (!Number.isFinite(value) || value <= 0 || (options.integer && !Number.isInteger(value))) {
+    throw new Error(`${contextKey} must be a positive ${options.integer ? 'integer' : 'number'}`);
   }
   return value;
 }
@@ -50,6 +54,10 @@ new InfraStack(app, `ThreeDInfra${stage}`, {
     String(
       app.node.tryGetContext('operationsAlertEmail') ?? process.env.OPERATIONS_ALERT_EMAIL ?? '',
     ) || undefined,
+  createJobBurstLimit: optionalNumber('createJobBurstLimit', 'CREATE_JOB_BURST_LIMIT'),
+  createJobRateLimit: optionalNumber('createJobRateLimit', 'CREATE_JOB_RATE_LIMIT', {
+    integer: false,
+  }),
   corsOrigin:
     String(app.node.tryGetContext('corsOrigin') ?? process.env.CORS_ORIGIN ?? '*') || undefined,
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },

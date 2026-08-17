@@ -19,6 +19,18 @@ terminal failure results live in S3. The Go API runs in Lambda behind a throttle
 HTTP API. CloudFront serves the private frontend bucket and proxies `/api/*` to
 API Gateway.
 
+API Gateway allows 5 requests per second with a burst of 10 by default. The
+upload-form creation route, `POST /api/v1/jobs`, has a tighter default of 1 request
+per second with a burst of 2; rejected requests receive HTTP 429 before Lambda runs
+or an S3 upload form is issued. The API Lambda also has reserved concurrency of 10,
+which caps simultaneous API executions and prevents it from consuming more than ten
+of the account's concurrent Lambda executions. These are stage-wide and function-wide
+controls, not per-client quotas.
+The browser uploads directly to S3, where the signed POST restricts the object key,
+expiry, and declared size. For hostile public traffic, add authentication and an
+edge WAF rule as well: throttling limits form issuance but is not a per-IP DDoS or
+cost-abuse control, and a valid signed POST remains usable until it expires.
+
 ## Prerequisites and bootstrap
 
 - Node.js and npm
@@ -88,6 +100,8 @@ wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`
 | Monthly budget (USD)   | `monthlyBudgetUsd`      | `MONTHLY_BUDGET_USD`      | `10` when alerts are enabled      |
 | Budget alert email     | `budgetAlertEmail`      | `BUDGET_ALERT_EMAIL`      | disabled when omitted             |
 | Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted |
+| Create-job burst limit | `createJobBurstLimit`   | `CREATE_JOB_BURST_LIMIT`  | `2`                               |
+| Create-job rate/second | `createJobRateLimit`    | `CREATE_JOB_RATE_LIMIT`   | `1`                               |
 
 For production, use `-c stage=prod` and set `CORS_ORIGIN` to a known custom frontend
 domain when available. The default `*` permits browser use of a scoped presigned POST form;

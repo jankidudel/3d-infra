@@ -1,5 +1,5 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
-import { HttpApi, HttpStage } from 'aws-cdk-lib/aws-apigatewayv2';
+import { CfnStage, HttpApi, HttpMethod, HttpStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
@@ -7,10 +7,15 @@ import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { JOB_INPUT_SUFFIX, JOB_METADATA_SUFFIX, JOBS_PREFIX } from './storage';
 
+const CREATE_JOB_PATH = '/api/v1/jobs';
+const CREATE_JOB_ROUTE_KEY = `POST ${CREATE_JOB_PATH}`;
+
 export interface ApiServiceProps {
   readonly stage: string;
   readonly bucket: Bucket;
   readonly artifactPath: string;
+  readonly createJobBurstLimit?: number;
+  readonly createJobRateLimit?: number;
 }
 
 export class ApiService extends Construct {
@@ -34,6 +39,7 @@ export class ApiService extends Construct {
       code: Code.fromAsset(props.artifactPath),
       memorySize: 128,
       timeout: Duration.seconds(15),
+      reservedConcurrentExecutions: 10,
       environment: { S3_BUCKET: props.bucket.bucketName },
       logGroup,
     });
@@ -41,10 +47,18 @@ export class ApiService extends Construct {
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
 
+    const integration = new HttpLambdaIntegration('LambdaIntegration', this.function);
     this.api = new HttpApi(this, 'HttpApi', {
       apiName: `3d-api-${props.stage}`,
       createDefaultStage: false,
-      defaultIntegration: new HttpLambdaIntegration('LambdaIntegration', this.function),
+      defaultIntegration: integration,
+    });
+    // A concrete route takes precedence over the catch-all $default route and lets
+    // API Gateway apply a tighter throttle to upload-form creation.
+    this.api.addRoutes({
+      path: CREATE_JOB_PATH,
+      methods: [HttpMethod.POST],
+      integration,
     });
     this.stage = new HttpStage(this, 'DefaultStage', {
       httpApi: this.api,
@@ -52,5 +66,12 @@ export class ApiService extends Construct {
       autoDeploy: true,
       throttle: { burstLimit: 10, rateLimit: 5 },
     });
+    const cfnStage = this.stage.node.defaultChild as CfnStage;
+    cfnStage.routeSettings = {
+      [CREATE_JOB_ROUTE_KEY]: {
+        ThrottlingBurstLimit: props.createJobBurstLimit ?? 2,
+        ThrottlingRateLimit: props.createJobRateLimit ?? 1,
+      },
+    };
   }
 }

@@ -161,6 +161,7 @@ void test('creates a throttled HTTP API Lambda with scoped storage access', () =
     Handler: 'bootstrap',
     MemorySize: 128,
     Timeout: 15,
+    ReservedConcurrentExecutions: 10,
     Environment: { Variables: { S3_BUCKET: Match.anyValue() } },
   });
   result.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
@@ -169,6 +170,35 @@ void test('creates a throttled HTTP API Lambda with scoped storage access', () =
     DefaultRouteSettings: {
       ThrottlingBurstLimit: 10,
       ThrottlingRateLimit: 5,
+    },
+    RouteSettings: {
+      'POST /api/v1/jobs': {
+        ThrottlingBurstLimit: 2,
+        ThrottlingRateLimit: 1,
+      },
+    },
+  });
+  result.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+    RouteKey: 'POST /api/v1/jobs',
+  });
+});
+
+void test('allows the create-job throttle to be configured', () => {
+  const stack = new InfraStack(new App(), 'RateLimitStack', {
+    stage: 'dev',
+    artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
+    apiArtifactPath,
+    frontendArtifactPath,
+    createJobBurstLimit: 4,
+    createJobRateLimit: 0.5,
+  });
+
+  Template.fromStack(stack).hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+    RouteSettings: {
+      'POST /api/v1/jobs': {
+        ThrottlingBurstLimit: 4,
+        ThrottlingRateLimit: 0.5,
+      },
     },
   });
 });

@@ -24,6 +24,8 @@ export interface InfraStackProps extends StackProps {
   readonly budgetAlertEmail?: string;
   readonly monthlyBudgetUsd?: number;
   readonly operationsAlertEmail?: string;
+  readonly createJobBurstLimit?: number;
+  readonly createJobRateLimit?: number;
 }
 
 export class InfraStack extends Stack {
@@ -51,6 +53,8 @@ export class InfraStack extends Stack {
       stage: props.stage,
       bucket: storage.bucket,
       artifactPath: props.apiArtifactPath,
+      createJobBurstLimit: props.createJobBurstLimit,
+      createJobRateLimit: props.createJobRateLimit,
     });
     const frontend = new FrontendHosting(this, 'Frontend', {
       stage: props.stage,
