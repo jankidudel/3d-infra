@@ -4,6 +4,7 @@ import { Construct } from 'constructs';
 
 export const JOBS_PREFIX = 'jobs/';
 export const JOB_INPUT_SUFFIX = '/input.stl';
+export const JOB_METADATA_SUFFIX = '/metadata.json';
 export const JOB_REPORT_SUFFIX = '/report.json';
 
 export interface StorageProps {

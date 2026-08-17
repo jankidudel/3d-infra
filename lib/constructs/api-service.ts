@@ -5,7 +5,7 @@ import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
-import { JOBS_PREFIX } from './storage';
+import { JOB_INPUT_SUFFIX, JOB_METADATA_SUFFIX, JOBS_PREFIX } from './storage';
 
 export interface ApiServiceProps {
   readonly stage: string;
@@ -37,7 +37,9 @@ export class ApiService extends Construct {
       environment: { S3_BUCKET: props.bucket.bucketName },
       logGroup,
     });
-    props.bucket.grantReadWrite(this.function, `${JOBS_PREFIX}*`);
+    props.bucket.grantRead(this.function, `${JOBS_PREFIX}*`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
 
     this.api = new HttpApi(this, 'HttpApi', {
       apiName: `3d-api-${props.stage}`,
