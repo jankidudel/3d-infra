@@ -1,5 +1,5 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
-import { CfnRoute, CfnStage, HttpApi, HttpMethod, HttpStage } from 'aws-cdk-lib/aws-apigatewayv2';
+import { CfnStage, HttpApi, HttpMethod, HttpStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
@@ -8,7 +8,6 @@ import { Construct } from 'constructs';
 import { JOB_INPUT_SUFFIX, JOB_METADATA_SUFFIX, JOBS_PREFIX } from './storage';
 
 const CREATE_JOB_PATH = '/api/v1/jobs';
-const CREATE_JOB_ROUTE_KEY = `POST ${CREATE_JOB_PATH}`;
 
 export interface ApiServiceProps {
   readonly stage: string;
@@ -53,16 +52,11 @@ export class ApiService extends Construct {
       createDefaultStage: false,
       defaultIntegration: integration,
     });
-    // A concrete route takes precedence over the catch-all $default route and lets
-    // API Gateway apply a tighter throttle to upload-form creation.
-    const [createJobRoute] = this.api.addRoutes({
+    this.api.addRoutes({
       path: CREATE_JOB_PATH,
       methods: [HttpMethod.POST],
       integration,
     });
-    if (!createJobRoute) {
-      throw new Error('The create-job API route was not created');
-    }
     this.stage = new HttpStage(this, 'DefaultStage', {
       httpApi: this.api,
       stageName: '$default',
@@ -70,12 +64,6 @@ export class ApiService extends Construct {
       throttle: { burstLimit: 10, rateLimit: 5 },
     });
     const cfnStage = this.stage.node.defaultChild as CfnStage;
-    cfnStage.addResourceDependency(createJobRoute.node.defaultChild as CfnRoute);
-    cfnStage.routeSettings = {
-      [CREATE_JOB_ROUTE_KEY]: {
-        ThrottlingBurstLimit: props.createJobBurstLimit ?? 2,
-        ThrottlingRateLimit: props.createJobRateLimit ?? 1,
-      },
-    };
+    cfnStage.routeSettings = {};
   }
 }
