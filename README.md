@@ -129,9 +129,12 @@ the CloudFront frontend URL and distribution ID.
 
 CloudFront serves Angular's prerendered HTML for clean routes such as
 `/stl-quality-check` without caching HTML responses. Hashed JavaScript and CSS
-assets are cached for one year, while `/api/*` is forwarded to API Gateway with
-caching disabled. Each frontend deployment invalidates `/*` automatically. To
-clear the distribution manually, use the `FrontendDistributionId` stack output:
+assets use CloudFront's managed optimized cache policy (24-hour default TTL and
+one-year maximum), while `/api/*` is forwarded to API Gateway with caching disabled.
+No custom cache policy is created, keeping the distribution compatible with
+CloudFront flat-rate tiers that do not include custom caching rules. Each frontend
+deployment invalidates `/*` automatically. To clear the distribution manually, use
+the `FrontendDistributionId` stack output:
 
 ```sh
 aws cloudfront create-invalidation \

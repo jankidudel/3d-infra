@@ -219,6 +219,7 @@ void test('creates private static hosting behind CloudFront with API routing', (
   result.hasResourceProperties('AWS::CloudFront::Function', {
     FunctionCode: Match.stringLikeRegexp("request.uri = uri \\+ '/index.html'"),
   });
+  result.resourceCountIs('AWS::CloudFront::CachePolicy', 0);
   result.hasOutput('FrontendDistributionId', {});
   result.hasOutput('FrontendUrl', {});
 });

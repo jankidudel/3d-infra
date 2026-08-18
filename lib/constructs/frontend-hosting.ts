@@ -1,4 +1,4 @@
-import { RemovalPolicy, Stack, Duration } from 'aws-cdk-lib';
+import { RemovalPolicy, Stack } from 'aws-cdk-lib';
 import {
   AllowedMethods,
   CachePolicy,
@@ -8,9 +8,6 @@ import {
   Function as CfFunction,
   FunctionCode,
   FunctionEventType,
-  CacheHeaderBehavior,
-  CacheCookieBehavior,
-  CacheQueryStringBehavior,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
@@ -41,16 +38,6 @@ export class FrontendHosting extends Construct {
     const stack = Stack.of(this);
     const apiDomain = `${props.api.api.apiId}.execute-api.${stack.region}.${stack.urlSuffix}`;
 
-    // Cache policy for long-lived, immutable hashed assets
-    const assetsCachePolicy = new CachePolicy(this, 'AssetsCachePolicy', {
-      defaultTtl: Duration.days(365),
-      minTtl: Duration.days(7),
-      maxTtl: Duration.days(365),
-      headerBehavior: CacheHeaderBehavior.none(),
-      cookieBehavior: CacheCookieBehavior.none(),
-      queryStringBehavior: CacheQueryStringBehavior.none(),
-    });
-
     // Resolve clean URLs to Angular's prerendered HTML. The default behavior is
     // deliberately uncached, so rewritten HTML never inherits the asset policy.
     const spaRewrite = new CfFunction(this, 'SpaRewriteFunction', {
@@ -80,12 +67,12 @@ export class FrontendHosting extends Construct {
         '*.js': {
           origin: frontendOrigin,
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: assetsCachePolicy,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
         },
         '*.css': {
           origin: frontendOrigin,
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: assetsCachePolicy,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
         },
         'api/*': {
           origin: new HttpOrigin(apiDomain),
