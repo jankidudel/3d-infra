@@ -200,9 +200,22 @@ void test('creates private static hosting behind CloudFront with API routing', (
   result.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: Match.objectLike({
       DefaultRootObject: 'index.html',
+      DefaultCacheBehavior: Match.objectLike({
+        CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+        FunctionAssociations: [
+          Match.objectLike({ EventType: 'viewer-request', FunctionARN: Match.anyValue() }),
+        ],
+      }),
       CacheBehaviors: Match.arrayWith([
+        Match.objectLike({ PathPattern: '*.js', ViewerProtocolPolicy: 'redirect-to-https' }),
+        Match.objectLike({ PathPattern: '*.css', ViewerProtocolPolicy: 'redirect-to-https' }),
         Match.objectLike({ PathPattern: 'api/*', ViewerProtocolPolicy: 'https-only' }),
       ]),
     }),
   });
+  result.hasResourceProperties('AWS::CloudFront::Function', {
+    FunctionCode: Match.stringLikeRegexp("request.uri = uri \\+ '/index.html'"),
+  });
+  result.hasOutput('FrontendDistributionId', {});
+  result.hasOutput('FrontendUrl', {});
 });

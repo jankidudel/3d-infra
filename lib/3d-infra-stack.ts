@@ -184,6 +184,7 @@ export class InfraStack extends Stack {
       });
     }
     new CfnOutput(this, 'StorageBucketName', { value: storage.bucket.bucketName });
+    new CfnOutput(this, 'FrontendBucketName', { value: frontend.bucket.bucketName });
     new CfnOutput(this, 'ProcessingQueueUrl', { value: processing.queue.queueUrl });
     new CfnOutput(this, 'ProcessingDeadLetterQueueUrl', {
       value: processing.deadLetterQueue.queueUrl,
@@ -193,6 +194,7 @@ export class InfraStack extends Stack {
     new CfnOutput(this, 'FrontendUrl', {
       value: `https://${frontend.distribution.distributionDomainName}`,
     });
+    new CfnOutput(this, 'FrontendDistributionId', { value: frontend.distribution.distributionId });
     if (alarmTopic) {
       new CfnOutput(this, 'OperationsAlarmTopicArn', { value: alarmTopic.topicArn });
     }

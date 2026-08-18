@@ -127,7 +127,19 @@ to route them through an SNS email subscription. AWS sends a confirmation messag
 the recipient must confirm the subscription before operational emails are delivered.
 
 The stack outputs storage and queue identifiers, Lambda names, the API URL, and
-the CloudFront frontend URL.
+the CloudFront frontend URL and distribution ID.
+
+CloudFront serves Angular's prerendered HTML for clean routes such as
+`/stl-quality-check` without caching HTML responses. Hashed JavaScript and CSS
+assets are cached for one year, while `/api/*` is forwarded to API Gateway with
+caching disabled. Each frontend deployment invalidates `/*` automatically. To
+clear the distribution manually, use the `FrontendDistributionId` stack output:
+
+```sh
+aws cloudfront create-invalidation \
+  --distribution-id DISTRIBUTION_ID \
+  --paths '/*'
+```
 
 ## Code quality and pre-commit checks
 

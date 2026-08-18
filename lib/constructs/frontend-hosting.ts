@@ -1,10 +1,16 @@
-import { RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { RemovalPolicy, Stack, Duration } from 'aws-cdk-lib';
 import {
   AllowedMethods,
   CachePolicy,
   Distribution,
   OriginRequestPolicy,
   ViewerProtocolPolicy,
+  Function as CfFunction,
+  FunctionCode,
+  FunctionEventType,
+  CacheHeaderBehavior,
+  CacheCookieBehavior,
+  CacheQueryStringBehavior,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
@@ -34,14 +40,53 @@ export class FrontendHosting extends Construct {
     });
     const stack = Stack.of(this);
     const apiDomain = `${props.api.api.apiId}.execute-api.${stack.region}.${stack.urlSuffix}`;
+
+    // Cache policy for long-lived, immutable hashed assets
+    const assetsCachePolicy = new CachePolicy(this, 'AssetsCachePolicy', {
+      defaultTtl: Duration.days(365),
+      minTtl: Duration.days(7),
+      maxTtl: Duration.days(365),
+      headerBehavior: CacheHeaderBehavior.none(),
+      cookieBehavior: CacheCookieBehavior.none(),
+      queryStringBehavior: CacheQueryStringBehavior.none(),
+    });
+
+    // Resolve clean URLs to Angular's prerendered HTML. The default behavior is
+    // deliberately uncached, so rewritten HTML never inherits the asset policy.
+    const spaRewrite = new CfFunction(this, 'SpaRewriteFunction', {
+      code: FunctionCode.fromInline(`function handler(event) {
+        var request = event.request;
+        var uri = request.uri;
+        if (uri.includes('.')) { return request; }
+        if (uri === '/') { request.uri = '/index.html'; return request; }
+        if (uri.endsWith('/')) { uri = uri.slice(0, -1); }
+        request.uri = uri + '/index.html';
+        return request;
+      }`),
+    });
+
+    const frontendOrigin = S3BucketOrigin.withOriginAccessControl(this.bucket);
     this.distribution = new Distribution(this, 'Distribution', {
       defaultRootObject: 'index.html',
       defaultBehavior: {
-        origin: S3BucketOrigin.withOriginAccessControl(this.bucket),
+        origin: frontendOrigin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+        cachePolicy: CachePolicy.CACHING_DISABLED,
+        functionAssociations: [
+          { eventType: FunctionEventType.VIEWER_REQUEST, function: spaRewrite },
+        ],
       },
       additionalBehaviors: {
+        '*.js': {
+          origin: frontendOrigin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: assetsCachePolicy,
+        },
+        '*.css': {
+          origin: frontendOrigin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: assetsCachePolicy,
+        },
         'api/*': {
           origin: new HttpOrigin(apiDomain),
           viewerProtocolPolicy: ViewerProtocolPolicy.HTTPS_ONLY,
