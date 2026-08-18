@@ -19,13 +19,11 @@ terminal failure results live in S3. The Go API runs in Lambda behind a throttle
 HTTP API. CloudFront serves the private frontend bucket and proxies `/api/*` to
 API Gateway.
 
-API Gateway allows 5 requests per second with a burst of 10 by default. The
-upload-form creation route, `POST /api/v1/jobs`, has a tighter default of 1 request
-per second with a burst of 2; rejected requests receive HTTP 429 before Lambda runs
-or an S3 upload form is issued. The API Lambda also has reserved concurrency of 10,
-which caps simultaneous API executions and prevents it from consuming more than ten
-of the account's concurrent Lambda executions. These are stage-wide and function-wide
-controls, not per-client quotas.
+API Gateway allows 5 requests per second with a burst of 10; rejected requests
+receive HTTP 429 before Lambda runs or an S3 upload form is issued. Reserved
+concurrency is not configured for the API Lambda because accounts with small
+concurrency quotas must retain AWS's minimum unreserved pool. These API Gateway
+controls are stage-wide, not per-client quotas.
 The browser uploads directly to S3, where the signed POST restricts the object key,
 expiry, and declared size. For hostile public traffic, add authentication and an
 edge WAF rule as well: throttling limits form issuance but is not a per-IP DDoS or

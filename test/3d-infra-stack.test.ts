@@ -161,8 +161,11 @@ void test('creates a throttled HTTP API Lambda with scoped storage access', () =
     Handler: 'bootstrap',
     MemorySize: 128,
     Timeout: 15,
-    ReservedConcurrentExecutions: 10,
     Environment: { Variables: { S3_BUCKET: Match.anyValue() } },
+  });
+  result.hasResourceProperties('AWS::Lambda::Function', {
+    FunctionName: '3d-api-dev',
+    ReservedConcurrentExecutions: Match.absent(),
   });
   result.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
     StageName: '$default',

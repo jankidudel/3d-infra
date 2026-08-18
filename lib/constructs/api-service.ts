@@ -38,7 +38,6 @@ export class ApiService extends Construct {
       code: Code.fromAsset(props.artifactPath),
       memorySize: 128,
       timeout: Duration.seconds(15),
-      reservedConcurrentExecutions: 10,
       environment: { S3_BUCKET: props.bucket.bucketName },
       logGroup,
     });
