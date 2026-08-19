@@ -19,6 +19,10 @@ export class Storage extends Construct {
   public constructor(scope: Construct, id: string, props: StorageProps) {
     super(scope, id);
     const isDev = props.stage === 'dev';
+    const allowedOrigins = [
+      ...(props.corsOrigin ? [props.corsOrigin] : []),
+      ...(isDev && props.corsOrigin !== '*' ? ['http://localhost:4200'] : []),
+    ];
     this.bucket = new Bucket(this, 'Bucket', {
       encryption: BucketEncryption.S3_MANAGED,
       enforceSSL: true,
@@ -33,15 +37,16 @@ export class Storage extends Construct {
           expiration: Duration.days(props.jobsRetentionDays ?? 1),
         },
       ],
-      cors: props.corsOrigin
-        ? [
-            {
-              allowedMethods: [HttpMethods.POST],
-              allowedOrigins: [props.corsOrigin],
-              allowedHeaders: ['*'],
-            },
-          ]
-        : undefined,
+      cors:
+        allowedOrigins.length > 0
+          ? [
+              {
+                allowedMethods: [HttpMethods.POST],
+                allowedOrigins: [...new Set(allowedOrigins)],
+                allowedHeaders: ['*'],
+              },
+            ]
+          : undefined,
     });
   }
 }

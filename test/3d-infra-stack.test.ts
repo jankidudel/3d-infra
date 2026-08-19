@@ -18,6 +18,41 @@ function template(stage = 'dev'): Template {
   return Template.fromStack(stack);
 }
 
+void test('allows browser uploads from the local development frontend', () => {
+  template().hasResourceProperties('AWS::S3::Bucket', {
+    CorsConfiguration: {
+      CorsRules: [
+        {
+          AllowedHeaders: ['*'],
+          AllowedMethods: ['POST'],
+          AllowedOrigins: ['http://localhost:4200'],
+        },
+      ],
+    },
+  });
+});
+
+void test('adds the local development frontend to a configured upload origin', () => {
+  const stack = new InfraStack(new App(), 'CorsStack', {
+    stage: 'dev',
+    artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
+    apiArtifactPath,
+    frontendArtifactPath,
+    corsOrigin: 'https://frontend.example.com',
+  });
+
+  Template.fromStack(stack).hasResourceProperties('AWS::S3::Bucket', {
+    CorsConfiguration: {
+      CorsRules: [
+        Match.objectLike({
+          AllowedMethods: ['POST'],
+          AllowedOrigins: ['https://frontend.example.com', 'http://localhost:4200'],
+        }),
+      ],
+    },
+  });
+});
+
 void test('deletes newly created logs on rollback and otherwise retains them', () => {
   template('dev').hasResource('AWS::Logs::LogGroup', {
     DeletionPolicy: 'RetainExceptOnCreate',

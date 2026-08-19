@@ -7,6 +7,9 @@ const stage = String(app.node.tryGetContext('stage') ?? process.env.STAGE ?? 'de
 if (!/^[a-z][a-z0-9-]*$/.test(stage)) {
   throw new Error(`Invalid stage "${stage}"`);
 }
+const configuredCorsOrigin = String(
+  app.node.tryGetContext('corsOrigin') ?? process.env.CORS_ORIGIN ?? '',
+).trim();
 const artifactPath = String(
   app.node.tryGetContext('processorArtifactPath') ?? process.env.PROCESSOR_ARTIFACT_PATH ?? '',
 );
@@ -58,7 +61,6 @@ new InfraStack(app, `ThreeDInfra${stage}`, {
   createJobRateLimit: optionalNumber('createJobRateLimit', 'CREATE_JOB_RATE_LIMIT', {
     integer: false,
   }),
-  corsOrigin:
-    String(app.node.tryGetContext('corsOrigin') ?? process.env.CORS_ORIGIN ?? '*') || undefined,
+  corsOrigin: configuredCorsOrigin || (stage === 'dev' ? 'http://localhost:4200' : '*'),
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
 });

@@ -94,15 +94,17 @@ wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`
 | API artifact           | `apiArtifactPath`       | `API_ARTIFACT_PATH`       | required                          |
 | Frontend artifact      | `frontendArtifactPath`  | `FRONTEND_ARTIFACT_PATH`  | required                          |
 | Memory (MB)            | `processorMemory`       | `PROCESSOR_MEMORY_MB`     | `256`                             |
-| Browser upload origin  | `corsOrigin`            | `CORS_ORIGIN`             | `*`                               |
+| Browser upload origin  | `corsOrigin`            | `CORS_ORIGIN`             | localhost (dev), `*` (otherwise)  |
 | Monthly budget (USD)   | `monthlyBudgetUsd`      | `MONTHLY_BUDGET_USD`      | `10` when alerts are enabled      |
 | Budget alert email     | `budgetAlertEmail`      | `BUDGET_ALERT_EMAIL`      | disabled when omitted             |
 | Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted |
 | Create-job burst limit | `createJobBurstLimit`   | `CREATE_JOB_BURST_LIMIT`  | `2`                               |
 | Create-job rate/second | `createJobRateLimit`    | `CREATE_JOB_RATE_LIMIT`   | `1`                               |
 
-For production, use `-c stage=prod` and set `CORS_ORIGIN` to a known custom frontend
-domain when available. The default `*` permits browser use of a scoped presigned POST form;
+Development always permits uploads from `http://localhost:4200`, including when another
+non-wildcard `CORS_ORIGIN` is configured. For production, use `-c stage=prod` and set
+`CORS_ORIGIN` to a known custom frontend domain when available. The production default `*`
+permits browser use of a scoped presigned POST form;
 it does not make the bucket public or authorize unsigned requests. Production retains the
 bucket and its contents when the stack is deleted; development enables bucket cleanup.
 Review the CloudFormation diff before every production deployment.
