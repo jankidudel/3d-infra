@@ -56,6 +56,10 @@ Each application repository owns its build artifact. `3d-processor` and `3d-api`
 produce Lambda ZIP files; `3d-frontend` produces a static browser directory.
 `3d-infra` receives and deploys those artifacts without compiling application code.
 
+The frontend artifact uses Angular's `development` configuration for `STAGE=dev`
+and its `production` configuration for `STAGE=prod`. This selects the matching
+frontend environment file for each CloudFront stage.
+
 ```bash
 export PROCESSOR_ARTIFACT_PATH=/absolute/path/to/processor.zip
 export API_ARTIFACT_PATH=/absolute/path/to/3d-api.zip

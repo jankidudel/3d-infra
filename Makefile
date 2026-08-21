@@ -14,6 +14,14 @@ STAGE ?= dev
 AWS_REGION ?= us-east-1
 AWS_ACCOUNT_ID = $(shell aws sts get-caller-identity --query Account --output text)
 
+ifeq ($(STAGE),dev)
+FRONTEND_BUILD_SCRIPT := build:development
+else ifeq ($(STAGE),prod)
+FRONTEND_BUILD_SCRIPT := build
+else
+$(error STAGE must be dev or prod)
+endif
+
 .PHONY: help check bootstrap application-artifacts synth-fast synth-real diff-dev deploy-dev destroy-dev
 
 help:
@@ -37,7 +45,7 @@ bootstrap:
 application-artifacts:
 	$(MAKE) -C "$(PROCESSOR_DIR)" package
 	$(MAKE) -C "$(API_DIR)" package
-	cd "$(FRONTEND_DIR)" && npm run build
+	cd "$(FRONTEND_DIR)" && npm run $(FRONTEND_BUILD_SCRIPT)
 
 synth-fast:
 	npm run test:synth
