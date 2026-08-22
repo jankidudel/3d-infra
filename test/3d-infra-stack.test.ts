@@ -215,7 +215,7 @@ void test('creates a throttled HTTP API Lambda with scoped storage access', () =
   });
 });
 
-void test('creates TTL rate-limit storage and grants only transactional writes to the API', () => {
+void test('creates TTL rate-limit storage and grants conditional read/write access to the API', () => {
   const result = template();
   result.hasResourceProperties('AWS::DynamoDB::Table', {
     BillingMode: 'PAY_PER_REQUEST',
@@ -227,7 +227,7 @@ void test('creates TTL rate-limit storage and grants only transactional writes t
     PolicyDocument: Match.objectLike({
       Statement: Match.arrayWith([
         Match.objectLike({
-          Action: ['dynamodb:TransactWriteItems', 'dynamodb:UpdateItem'],
+          Action: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],
           Effect: 'Allow',
         }),
       ]),

@@ -73,7 +73,7 @@ export class ApiService extends Construct {
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
     this.function.addToRolePolicy(
       new PolicyStatement({
-        actions: ['dynamodb:TransactWriteItems', 'dynamodb:UpdateItem'],
+        actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],
         resources: [this.rateLimitTable.tableArn],
       }),
     );
