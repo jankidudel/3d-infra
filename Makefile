@@ -15,7 +15,7 @@ AWS_REGION ?= us-east-1
 AWS_ACCOUNT_ID = $(shell aws sts get-caller-identity --query Account --output text)
 
 ifeq ($(STAGE),dev)
-FRONTEND_BUILD_SCRIPT := build:development
+FRONTEND_BUILD_SCRIPT := build:deployment-development
 else ifeq ($(STAGE),prod)
 FRONTEND_BUILD_SCRIPT := build
 else
