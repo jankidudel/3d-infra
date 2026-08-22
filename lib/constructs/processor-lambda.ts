@@ -1,5 +1,11 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
-import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
+import {
+  Architecture,
+  Code,
+  Function as LambdaFunction,
+  Runtime,
+  LambdaInsightsVersion,
+} from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
@@ -37,6 +43,7 @@ export class ProcessorLambda extends Construct {
       timeout: Duration.seconds(PROCESSOR_TIMEOUT_SECONDS),
       environment: { STORAGE_BUCKET_NAME: props.bucket.bucketName, JOBS_PREFIX },
       logGroup,
+      insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
     });
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_REPORT_SUFFIX}`);

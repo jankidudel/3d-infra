@@ -1,7 +1,13 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { CfnStage, HttpApi, HttpMethod, HttpStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
+import {
+  Architecture,
+  Code,
+  Function as LambdaFunction,
+  Runtime,
+  LambdaInsightsVersion,
+} from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
@@ -60,13 +66,14 @@ export class ApiService extends Construct {
         RATE_LIMIT_SECRET: rateLimitSecret.secretValue.unsafeUnwrap(),
       },
       logGroup,
+      insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
     });
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
     this.function.addToRolePolicy(
       new PolicyStatement({
-        actions: ['dynamodb:TransactWriteItems'],
+        actions: ['dynamodb:TransactWriteItems', 'dynamodb:UpdateItem'],
         resources: [this.rateLimitTable.tableArn],
       }),
     );

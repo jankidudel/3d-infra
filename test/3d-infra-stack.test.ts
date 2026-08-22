@@ -226,7 +226,10 @@ void test('creates TTL rate-limit storage and grants only transactional writes t
   result.hasResourceProperties('AWS::IAM::Policy', {
     PolicyDocument: Match.objectLike({
       Statement: Match.arrayWith([
-        Match.objectLike({ Action: 'dynamodb:TransactWriteItems', Effect: 'Allow' }),
+        Match.objectLike({
+          Action: ['dynamodb:TransactWriteItems', 'dynamodb:UpdateItem'],
+          Effect: 'Allow',
+        }),
       ]),
     }),
   });
