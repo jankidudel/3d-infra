@@ -166,7 +166,7 @@ void test('routes only job input object-created events to SQS', () => {
   });
 });
 
-void test('creates seven operational alarms and optional email notifications', () => {
+void test('creates API failure monitoring alarms and optional email notifications', () => {
   const stack = new InfraStack(new App(), 'AlarmStack', {
     stage: 'dev',
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
@@ -176,7 +176,7 @@ void test('creates seven operational alarms and optional email notifications', (
   });
   const result = Template.fromStack(stack);
 
-  result.resourceCountIs('AWS::CloudWatch::Alarm', 7);
+  result.resourceCountIs('AWS::CloudWatch::Alarm', 8);
   result.hasResourceProperties('AWS::CloudWatch::Alarm', {
     AlarmName: '3d-processing-dlq-messages-dev',
     Threshold: 1,
@@ -185,6 +185,19 @@ void test('creates seven operational alarms and optional email notifications', (
   result.hasResourceProperties('AWS::SNS::Subscription', {
     Protocol: 'email',
     Endpoint: 'operations@example.com',
+  });
+  result.hasResourceProperties('AWS::Logs::MetricFilter', {
+    FilterPattern: 'ERROR',
+    MetricTransformations: [
+      { MetricNamespace: '3DQuality/API', MetricName: 'ApplicationErrors', MetricValue: '1' },
+    ],
+  });
+  result.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    AlarmName: '3d-api-application-errors-dev',
+    Threshold: 1,
+  });
+  result.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+    DashboardName: '3d-api-dev',
   });
 });
 

@@ -1,6 +1,12 @@
 import { CfnOutput, Duration, Stack, StackProps, Tags } from 'aws-cdk-lib';
 import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
-import { Alarm, ComparisonOperator, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import {
+  Alarm,
+  ComparisonOperator,
+  Dashboard,
+  GraphWidget,
+  TreatMissingData,
+} from 'aws-cdk-lib/aws-cloudwatch';
 import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -133,6 +139,14 @@ export class InfraStack extends Stack {
         comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: TreatMissingData.NOT_BREACHING,
       }),
+      new Alarm(this, 'ApiApplicationErrorsAlarm', {
+        alarmName: `3d-api-application-errors-${props.stage}`,
+        metric: api.applicationErrors,
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
     ];
     if (alarmTopic) {
       const alarmAction = new SnsAction(alarmTopic);
@@ -140,6 +154,24 @@ export class InfraStack extends Stack {
         alarm.addAlarmAction(alarmAction);
       }
     }
+    new Dashboard(this, 'ApiMonitoringDashboard', {
+      dashboardName: `3d-api-${props.stage}`,
+      widgets: [
+        [
+          new GraphWidget({
+            title: '3D API failures',
+            left: [
+              api.function.metricErrors({ period: Duration.minutes(5), label: 'Lambda Errors' }),
+              api.stage.metricServerError({
+                period: Duration.minutes(5),
+                label: 'API Gateway 5XX Errors',
+              }),
+              api.applicationErrors.with({ label: 'Application Errors' }),
+            ],
+          }),
+        ],
+      ],
+    });
     Tags.of(this).add('Project', '3d-quality');
     Tags.of(this).add('Environment', props.stage);
     Tags.of(this).add('ManagedBy', 'CDK');

@@ -9,7 +9,8 @@ import {
   LambdaInsightsVersion,
 } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { Metric, Stats } from 'aws-cdk-lib/aws-cloudwatch';
+import { FilterPattern, LogGroup, MetricFilter, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
@@ -31,6 +32,7 @@ export class ApiService extends Construct {
   public readonly api: HttpApi;
   public readonly stage: HttpStage;
   public readonly rateLimitTable: Table;
+  public readonly applicationErrors: Metric;
 
   public constructor(scope: Construct, id: string, props: ApiServiceProps) {
     super(scope, id);
@@ -67,6 +69,17 @@ export class ApiService extends Construct {
       },
       logGroup,
       insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
+    });
+    const applicationErrors = new MetricFilter(this, 'ApplicationErrors', {
+      logGroup,
+      filterPattern: FilterPattern.literal('ERROR'),
+      metricNamespace: '3DQuality/API',
+      metricName: 'ApplicationErrors',
+      metricValue: '1',
+    });
+    this.applicationErrors = applicationErrors.metric({
+      statistic: Stats.SUM,
+      period: Duration.minutes(5),
     });
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
