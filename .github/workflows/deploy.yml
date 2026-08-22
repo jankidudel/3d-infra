@@ -44,8 +44,8 @@ jobs:
       STAGE: ${{ (inputs.environment || 'dev') == 'production' && 'prod' || 'dev' }}
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
-      BUDGET_ALERT_EMAIL: ${{ secrets.BUDGET_ALERT_EMAIL }}
-      OPERATIONS_ALERT_EMAIL: ${{ secrets.OPERATIONS_ALERT_EMAIL }}
+      BUDGET_ALERT_EMAIL: ${{ vars.BUDGET_ALERT_EMAIL }}
+      OPERATIONS_ALERT_EMAIL: ${{ vars.OPERATIONS_ALERT_EMAIL }}
       MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
       CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
     steps:
