@@ -2,8 +2,11 @@ import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { CfnStage, HttpApi, HttpMethod, HttpStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { JOB_INPUT_SUFFIX, JOB_METADATA_SUFFIX, JOBS_PREFIX } from './storage';
 
@@ -21,6 +24,7 @@ export class ApiService extends Construct {
   public readonly function: LambdaFunction;
   public readonly api: HttpApi;
   public readonly stage: HttpStage;
+  public readonly rateLimitTable: Table;
 
   public constructor(scope: Construct, id: string, props: ApiServiceProps) {
     super(scope, id);
@@ -30,6 +34,18 @@ export class ApiService extends Construct {
       retention: RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
+    const isDev = props.stage === 'dev';
+    this.rateLimitTable = new Table(this, 'RateLimitTable', {
+      tableName: `3d-api-rate-limits-${props.stage}`,
+      partitionKey: { name: 'windowKey', type: AttributeType.STRING },
+      billingMode: BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy: isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
+    });
+    const rateLimitSecret = new Secret(this, 'RateLimitSecret', {
+      secretName: `3d-api-rate-limit-secret-${props.stage}`,
+      generateSecretString: { excludePunctuation: true },
+    });
     this.function = new LambdaFunction(this, 'Function', {
       functionName,
       runtime: Runtime.PROVIDED_AL2023,
@@ -38,12 +54,23 @@ export class ApiService extends Construct {
       code: Code.fromAsset(props.artifactPath),
       memorySize: 128,
       timeout: Duration.seconds(15),
-      environment: { S3_BUCKET: props.bucket.bucketName },
+      environment: {
+        S3_BUCKET: props.bucket.bucketName,
+        RATE_LIMIT_TABLE: this.rateLimitTable.tableName,
+        RATE_LIMIT_SECRET: rateLimitSecret.secretValue.unsafeUnwrap(),
+      },
       logGroup,
     });
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
+    this.function.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['dynamodb:TransactWriteItems'],
+        resources: [this.rateLimitTable.tableArn],
+      }),
+    );
+    rateLimitSecret.grantRead(this.function);
 
     const integration = new HttpLambdaIntegration('LambdaIntegration', this.function);
     this.api = new HttpApi(this, 'HttpApi', {

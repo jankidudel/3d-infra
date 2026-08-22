@@ -215,6 +215,23 @@ void test('creates a throttled HTTP API Lambda with scoped storage access', () =
   });
 });
 
+void test('creates TTL rate-limit storage and grants only transactional writes to the API', () => {
+  const result = template();
+  result.hasResourceProperties('AWS::DynamoDB::Table', {
+    BillingMode: 'PAY_PER_REQUEST',
+    KeySchema: [{ AttributeName: 'windowKey', KeyType: 'HASH' }],
+    TimeToLiveSpecification: { AttributeName: 'expiresAt', Enabled: true },
+    PointInTimeRecoverySpecification: Match.absent(),
+  });
+  result.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: Match.objectLike({
+      Statement: Match.arrayWith([
+        Match.objectLike({ Action: 'dynamodb:TransactWriteItems', Effect: 'Allow' }),
+      ]),
+    }),
+  });
+});
+
 void test('keeps a default stage throttle for the API', () => {
   const stack = new InfraStack(new App(), 'RateLimitStack', {
     stage: 'dev',
