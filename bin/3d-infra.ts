@@ -11,6 +11,9 @@ if (!/^[a-z][a-z0-9-]*$/.test(stage)) {
 const configuredCorsOrigin = String(
   app.node.tryGetContext('corsOrigin') ?? process.env.CORS_ORIGIN ?? '',
 ).trim();
+const webAclArn = String(
+  app.node.tryGetContext('webAclArn') ?? process.env.CLOUDFRONT_WEB_ACL_ARN ?? '',
+).trim();
 if (
   stage === 'prod' &&
   configuredCorsOrigin &&
@@ -74,5 +77,6 @@ new InfraStack(app, `ThreeDInfra${stage}`, {
       ? productionDomain.canonicalUrl
       : configuredCorsOrigin || 'http://localhost:4200',
   customDomain: stage === 'prod' ? productionDomain : undefined,
+  webAclArn: webAclArn || undefined,
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
 });

@@ -16,6 +16,10 @@ function template(stage = 'dev'): Template {
     frontendArtifactPath,
     corsOrigin: stage === 'prod' ? productionDomain.canonicalUrl : 'http://localhost:4200',
     customDomain: stage === 'prod' ? productionDomain : undefined,
+    webAclArn:
+      stage === 'dev'
+        ? 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/dev/example'
+        : undefined,
   });
   return Template.fromStack(stack);
 }
@@ -38,6 +42,14 @@ void test('takes the rate-limit signing secret from a NoEcho deployment paramete
   const result = template();
   result.hasParameter('RateLimitSecret', { NoEcho: true, MinLength: 32 });
   result.resourceCountIs('AWS::SecretsManager::Secret', 0);
+});
+
+void test('retains the configured Web ACL on the CloudFront distribution', () => {
+  template().hasResourceProperties('AWS::CloudFront::Distribution', {
+    DistributionConfig: {
+      WebACLId: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/dev/example',
+    },
+  });
 });
 
 void test('configures an isolated production custom domain with strict upload CORS', () => {

@@ -27,6 +27,7 @@ export interface FrontendHostingProps {
   readonly artifactPath: string;
   readonly api: ApiService;
   readonly customDomain?: typeof productionDomain;
+  readonly webAclArn?: string;
 }
 
 export class FrontendHosting extends Construct {
@@ -105,6 +106,7 @@ export class FrontendHosting extends Construct {
       domainNames: props.customDomain
         ? [props.customDomain.canonicalDomain, props.customDomain.apexDomain]
         : undefined,
+      webAclId: props.webAclArn,
       defaultRootObject: 'index.html',
       defaultBehavior: {
         origin: frontendOrigin,

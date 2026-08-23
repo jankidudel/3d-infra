@@ -34,6 +34,7 @@ export interface InfraStackProps extends StackProps {
   readonly createJobBurstLimit?: number;
   readonly createJobRateLimit?: number;
   readonly customDomain?: typeof productionDomain;
+  readonly webAclArn?: string;
 }
 
 export class InfraStack extends Stack {
@@ -76,6 +77,7 @@ export class InfraStack extends Stack {
       artifactPath: props.frontendArtifactPath,
       api,
       customDomain: props.customDomain,
+      webAclArn: props.webAclArn,
     });
     const alarmTopic = props.operationsAlertEmail
       ? new Topic(this, 'OperationsAlarmTopic', {

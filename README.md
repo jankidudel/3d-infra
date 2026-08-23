@@ -224,6 +224,7 @@ Set the following environment variables in both environments as appropriate:
 | `CORS_ORIGIN`            | Variable | Optional development upload origin; production is fixed in CDK           |
 | `BUDGET_ALERT_EMAIL`     | Variable | Recipient for AWS Budget notifications                                   |
 | `OPERATIONS_ALERT_EMAIL` | Variable | Recipient for CloudWatch alarm notifications                             |
+| `CLOUDFRONT_WEB_ACL_ARN` | Variable | Required dev pricing-plan WAF Web ACL ARN                                |
 | `RATE_LIMIT_SECRET`      | Secret   | Random, stage-specific rate-limit signing secret; at least 32 characters |
 
 If the component repositories are public, the workflow's normal GitHub token can read
