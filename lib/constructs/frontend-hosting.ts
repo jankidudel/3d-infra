@@ -1,11 +1,9 @@
-import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Certificate, CertificateValidation } from 'aws-cdk-lib/aws-certificatemanager';
 import {
   AllowedMethods,
   CachePolicy,
   Distribution,
-  HeadersFrameOption,
-  HeadersReferrerPolicy,
   OriginRequestPolicy,
   ResponseHeadersPolicy,
   ViewerProtocolPolicy,
@@ -76,31 +74,8 @@ export class FrontendHosting extends Construct {
     });
 
     const frontendOrigin = S3BucketOrigin.withOriginAccessControl(this.bucket);
-    const responseHeadersPolicy = new ResponseHeadersPolicy(this, 'ResponseHeaders', {
-      securityHeadersBehavior: {
-        contentTypeOptions: { override: true },
-        frameOptions: { frameOption: HeadersFrameOption.DENY, override: true },
-        referrerPolicy: {
-          referrerPolicy: HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
-          override: true,
-        },
-        strictTransportSecurity: {
-          accessControlMaxAge: Duration.days(365),
-          includeSubdomains: true,
-          preload: false,
-          override: true,
-        },
-      },
-      customHeadersBehavior: {
-        customHeaders: [
-          {
-            header: 'Permissions-Policy',
-            value: 'camera=(), geolocation=(), microphone=()',
-            override: true,
-          },
-        ],
-      },
-    });
+    // Free CloudFront pricing plans permit managed, but not custom, response-header policies.
+    const responseHeadersPolicy = ResponseHeadersPolicy.SECURITY_HEADERS;
     this.distribution = new Distribution(this, 'Distribution', {
       certificate,
       domainNames: props.customDomain
