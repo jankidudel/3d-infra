@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { App } from 'aws-cdk-lib';
 import { InfraStack } from '../lib/3d-infra-stack';
+import { productionDomain } from '../lib/production-domain';
 
 const app = new App();
 const stage = String(app.node.tryGetContext('stage') ?? process.env.STAGE ?? 'dev');
@@ -10,6 +11,13 @@ if (!/^[a-z][a-z0-9-]*$/.test(stage)) {
 const configuredCorsOrigin = String(
   app.node.tryGetContext('corsOrigin') ?? process.env.CORS_ORIGIN ?? '',
 ).trim();
+if (
+  stage === 'prod' &&
+  configuredCorsOrigin &&
+  configuredCorsOrigin !== productionDomain.canonicalUrl
+) {
+  throw new Error(`Production CORS origin must be ${productionDomain.canonicalUrl}.`);
+}
 const artifactPath = String(
   app.node.tryGetContext('processorArtifactPath') ?? process.env.PROCESSOR_ARTIFACT_PATH ?? '',
 );
@@ -61,6 +69,10 @@ new InfraStack(app, `ThreeDInfra${stage}`, {
   createJobRateLimit: optionalNumber('createJobRateLimit', 'CREATE_JOB_RATE_LIMIT', {
     integer: false,
   }),
-  corsOrigin: configuredCorsOrigin || (stage === 'dev' ? 'http://localhost:4200' : '*'),
+  corsOrigin:
+    stage === 'prod'
+      ? productionDomain.canonicalUrl
+      : configuredCorsOrigin || 'http://localhost:4200',
+  customDomain: stage === 'prod' ? productionDomain : undefined,
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
 });

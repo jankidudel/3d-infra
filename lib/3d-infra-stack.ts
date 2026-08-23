@@ -1,4 +1,4 @@
-import { CfnOutput, Duration, Stack, StackProps, Tags } from 'aws-cdk-lib';
+import { CfnOutput, CfnParameter, Duration, Fn, Stack, StackProps, Tags } from 'aws-cdk-lib';
 import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
 import {
   Alarm,
@@ -19,6 +19,7 @@ import { ProcessorLambda } from './constructs/processor-lambda';
 import { JOB_INPUT_SUFFIX, JOBS_PREFIX, Storage } from './constructs/storage';
 import { ApiService } from './constructs/api-service';
 import { FrontendHosting } from './constructs/frontend-hosting';
+import { productionDomain } from './production-domain';
 
 export interface InfraStackProps extends StackProps {
   readonly stage: string;
@@ -32,6 +33,7 @@ export interface InfraStackProps extends StackProps {
   readonly operationsAlertEmail?: string;
   readonly createJobBurstLimit?: number;
   readonly createJobRateLimit?: number;
+  readonly customDomain?: typeof productionDomain;
 }
 
 export class InfraStack extends Stack {
@@ -40,6 +42,12 @@ export class InfraStack extends Stack {
     const storage = new Storage(this, 'Storage', {
       stage: props.stage,
       corsOrigin: props.corsOrigin,
+    });
+    const rateLimitSecret = new CfnParameter(this, 'RateLimitSecret', {
+      type: 'String',
+      noEcho: true,
+      minLength: 32,
+      description: 'Random rate-limit signing secret supplied by the protected GitHub Environment.',
     });
     const processing = new ProcessingQueue(this, 'Processing', { stage: props.stage });
     const processor = new ProcessorLambda(this, 'Processor', {
@@ -61,11 +69,13 @@ export class InfraStack extends Stack {
       artifactPath: props.apiArtifactPath,
       createJobBurstLimit: props.createJobBurstLimit,
       createJobRateLimit: props.createJobRateLimit,
+      rateLimitSecret: rateLimitSecret.valueAsString,
     });
     const frontend = new FrontendHosting(this, 'Frontend', {
       stage: props.stage,
       artifactPath: props.frontendArtifactPath,
       api,
+      customDomain: props.customDomain,
     });
     const alarmTopic = props.operationsAlertEmail
       ? new Topic(this, 'OperationsAlarmTopic', {
@@ -227,6 +237,12 @@ export class InfraStack extends Stack {
       value: `https://${frontend.distribution.distributionDomainName}`,
     });
     new CfnOutput(this, 'FrontendDistributionId', { value: frontend.distribution.distributionId });
+    if (frontend.hostedZone) {
+      new CfnOutput(this, 'ProductionHostedZoneId', { value: frontend.hostedZone.hostedZoneId });
+      new CfnOutput(this, 'ProductionHostedZoneNameServers', {
+        value: Fn.join(', ', frontend.hostedZone.hostedZoneNameServers!),
+      });
+    }
     if (alarmTopic) {
       new CfnOutput(this, 'OperationsAlarmTopicArn', { value: alarmTopic.topicArn });
     }

@@ -13,7 +13,6 @@ import { Metric, Stats } from 'aws-cdk-lib/aws-cloudwatch';
 import { FilterPattern, LogGroup, MetricFilter, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
-import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { JOB_INPUT_SUFFIX, JOB_METADATA_SUFFIX, JOBS_PREFIX } from './storage';
 
@@ -25,6 +24,7 @@ export interface ApiServiceProps {
   readonly artifactPath: string;
   readonly createJobBurstLimit?: number;
   readonly createJobRateLimit?: number;
+  readonly rateLimitSecret: string;
 }
 
 export class ApiService extends Construct {
@@ -50,10 +50,6 @@ export class ApiService extends Construct {
       timeToLiveAttribute: 'expiresAt',
       removalPolicy: isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
     });
-    const rateLimitSecret = new Secret(this, 'RateLimitSecret', {
-      secretName: `3d-api-rate-limit-secret-${props.stage}`,
-      generateSecretString: { excludePunctuation: true },
-    });
     this.function = new LambdaFunction(this, 'Function', {
       functionName,
       runtime: Runtime.PROVIDED_AL2023,
@@ -65,7 +61,7 @@ export class ApiService extends Construct {
       environment: {
         S3_BUCKET: props.bucket.bucketName,
         RATE_LIMIT_TABLE: this.rateLimitTable.tableName,
-        RATE_LIMIT_SECRET: rateLimitSecret.secretValue.unsafeUnwrap(),
+        RATE_LIMIT_SECRET: props.rateLimitSecret,
       },
       logGroup,
       insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
@@ -90,7 +86,6 @@ export class ApiService extends Construct {
         resources: [this.rateLimitTable.tableArn],
       }),
     );
-    rateLimitSecret.grantRead(this.function);
 
     const integration = new HttpLambdaIntegration('LambdaIntegration', this.function);
     this.api = new HttpApi(this, 'HttpApi', {

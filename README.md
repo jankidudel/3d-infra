@@ -86,34 +86,34 @@ export API_ARTIFACT_PATH=/absolute/path/to/3d-api.zip
 export FRONTEND_ARTIFACT_PATH=/absolute/path/to/frontend/browser
 npx cdk synth -c stage=dev
 npx cdk diff -c stage=dev
-npx cdk deploy -c stage=dev
+npx cdk deploy -c stage=dev --parameters RateLimitSecret="$RATE_LIMIT_SECRET"
 npx cdk destroy -c stage=dev
 ```
 
-All three artifact paths are required by the CDK entry point for these direct commands. The npm
-wrappers work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and
-`npm run deploy -- -c stage=dev`.
+All three artifact paths are required by the CDK entry point for these direct commands.
+Deployments also require a random `RATE_LIMIT_SECRET` of at least 32 characters. The npm wrappers
+work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and
+`npm run deploy -- -c stage=dev --parameters RateLimitSecret="$RATE_LIMIT_SECRET"`.
 
-| Setting                | Context                 | Environment               | Default                           |
-| ---------------------- | ----------------------- | ------------------------- | --------------------------------- |
-| Processor artifact     | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH` | required                          |
-| API artifact           | `apiArtifactPath`       | `API_ARTIFACT_PATH`       | required                          |
-| Frontend artifact      | `frontendArtifactPath`  | `FRONTEND_ARTIFACT_PATH`  | required                          |
-| Memory (MB)            | `processorMemory`       | `PROCESSOR_MEMORY_MB`     | `256`                             |
-| Browser upload origin  | `corsOrigin`            | `CORS_ORIGIN`             | localhost (dev), `*` (otherwise)  |
-| Monthly budget (USD)   | `monthlyBudgetUsd`      | `MONTHLY_BUDGET_USD`      | `10` when alerts are enabled      |
-| Budget alert email     | `budgetAlertEmail`      | `BUDGET_ALERT_EMAIL`      | disabled when omitted             |
-| Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted |
-| Create-job burst limit | `createJobBurstLimit`   | `CREATE_JOB_BURST_LIMIT`  | `2`                               |
-| Create-job rate/second | `createJobRateLimit`    | `CREATE_JOB_RATE_LIMIT`   | `1`                               |
+| Setting                | Context                 | Environment               | Default                               |
+| ---------------------- | ----------------------- | ------------------------- | ------------------------------------- |
+| Processor artifact     | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH` | required                              |
+| API artifact           | `apiArtifactPath`       | `API_ARTIFACT_PATH`       | required                              |
+| Frontend artifact      | `frontendArtifactPath`  | `FRONTEND_ARTIFACT_PATH`  | required                              |
+| Memory (MB)            | `processorMemory`       | `PROCESSOR_MEMORY_MB`     | `256`                                 |
+| Browser upload origin  | `corsOrigin`            | `CORS_ORIGIN`             | localhost (dev), canonical URL (prod) |
+| Monthly budget (USD)   | `monthlyBudgetUsd`      | `MONTHLY_BUDGET_USD`      | `10` when alerts are enabled          |
+| Budget alert email     | `budgetAlertEmail`      | `BUDGET_ALERT_EMAIL`      | disabled when omitted                 |
+| Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted     |
+| Create-job burst limit | `createJobBurstLimit`   | `CREATE_JOB_BURST_LIMIT`  | `2`                                   |
+| Create-job rate/second | `createJobRateLimit`    | `CREATE_JOB_RATE_LIMIT`   | `1`                                   |
 
 Development always permits uploads from `http://localhost:4200`, including when another
-non-wildcard `CORS_ORIGIN` is configured. For production, use `-c stage=prod` and set
-`CORS_ORIGIN` to a known custom frontend domain when available. The production default `*`
-permits browser use of a scoped presigned POST form;
-it does not make the bucket public or authorize unsigned requests. Production retains the
-bucket and its contents when the stack is deleted; development enables bucket cleanup.
-Review the CloudFormation diff before every production deployment.
+non-wildcard `CORS_ORIGIN` is configured. Production CORS is fixed to
+`https://www.inspectmesh.com`; a different non-empty `CORS_ORIGIN` fails synthesis. This
+does not make the bucket public or authorize unsigned requests. Production retains the bucket
+and its contents when the stack is deleted; development enables bucket cleanup. Review the
+CloudFormation diff before every production deployment.
 
 Processor logs use the same lifecycle policy in every stage. A newly created log group is
 deleted if its initial deployment rolls back, preventing an empty orphan from blocking a
@@ -200,8 +200,8 @@ make deploy-dev \
 `.github/workflows/deploy.yml` provides continuous deployment without storing
 long-lived AWS access keys. A push to `3d-infra/main` verifies all four repositories
 and deploys the `dev` stage. The workflow can also be started manually with
-`workflow_dispatch`; manual runs can select `dev` or `production` and a branch, tag,
-or commit for each application repository. Production uses the CDK stage name `prod`.
+`workflow_dispatch`; manual runs can select `dev` or `prod` and a branch, tag, or commit for
+each application repository.
 
 The workflow checks out `main` from each application repository for an automatic dev
 deployment. A change pushed only to an application repository does not trigger this
@@ -212,18 +212,19 @@ coordinated release.
 Configure these GitHub Environments in the `3d-infra` repository:
 
 - `dev` — optionally require reviewer approval while the deployment is new.
-- `production` — require reviewer approval and restrict which branches may deploy.
+- `prod` — require reviewer approval and restrict which branches may deploy.
 
 Set the following environment variables in both environments as appropriate:
 
-| GitHub environment value | Kind     | Purpose                                                            |
-| ------------------------ | -------- | ------------------------------------------------------------------ |
-| `AWS_DEPLOY_ROLE_ARN`    | Variable | IAM role assumed through GitHub OIDC                               |
-| `AWS_ACCOUNT_ID`         | Variable | Expected AWS account; prevents accidental cross-account deployment |
-| `MONTHLY_BUDGET_USD`     | Variable | Monthly project budget; for example `10`                           |
-| `CORS_ORIGIN`            | Variable | Allowed upload origin; `*` is the current development default      |
-| `BUDGET_ALERT_EMAIL`     | Secret   | Recipient for AWS Budget notifications                             |
-| `OPERATIONS_ALERT_EMAIL` | Secret   | Recipient for CloudWatch alarm notifications                       |
+| GitHub environment value | Kind     | Purpose                                                                  |
+| ------------------------ | -------- | ------------------------------------------------------------------------ |
+| `AWS_DEPLOY_ROLE_ARN`    | Variable | IAM role assumed through GitHub OIDC                                     |
+| `AWS_ACCOUNT_ID`         | Variable | Expected AWS account; prevents accidental cross-account deployment       |
+| `MONTHLY_BUDGET_USD`     | Variable | Monthly project budget; for example `10`                                 |
+| `CORS_ORIGIN`            | Variable | Optional development upload origin; production is fixed in CDK           |
+| `BUDGET_ALERT_EMAIL`     | Variable | Recipient for AWS Budget notifications                                   |
+| `OPERATIONS_ALERT_EMAIL` | Variable | Recipient for CloudWatch alarm notifications                             |
+| `RATE_LIMIT_SECRET`      | Secret   | Random, stage-specific rate-limit signing secret; at least 32 characters |
 
 If the component repositories are public, the workflow's normal GitHub token can read
 them. If any are private, create `COMPONENT_REPOSITORIES_TOKEN` as an environment secret
@@ -233,7 +234,7 @@ using a fine-grained token or GitHub App token with read-only Contents access to
 In AWS, create the GitHub OIDC provider for
 `https://token.actions.githubusercontent.com` with audience `sts.amazonaws.com`, then
 create a deployment role whose trust policy is restricted to this repository and the
-`dev`/`production` GitHub environments. Grant that role only the CDK bootstrap and
+`dev`/`prod` GitHub environments. Grant that role only the CDK bootstrap and
 CloudFormation deployment permissions required by this stack. The workflow's
 `id-token: write` permission lets it request a signed GitHub identity token; AWS STS
 validates the token and returns temporary credentials for that workflow run. GitHub

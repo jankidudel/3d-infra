@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { InfraStack } from '../lib/3d-infra-stack';
+import { productionDomain } from '../lib/production-domain';
 
 const apiArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'api');
 const frontendArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'frontend');
@@ -13,7 +14,8 @@ function template(stage = 'dev'): Template {
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
     apiArtifactPath,
     frontendArtifactPath,
-    corsOrigin: 'http://localhost:4200',
+    corsOrigin: stage === 'prod' ? productionDomain.canonicalUrl : 'http://localhost:4200',
+    customDomain: stage === 'prod' ? productionDomain : undefined,
   });
   return Template.fromStack(stack);
 }
@@ -30,6 +32,31 @@ void test('allows browser uploads from the local development frontend', () => {
       ],
     },
   });
+});
+
+void test('takes the rate-limit signing secret from a NoEcho deployment parameter', () => {
+  const result = template();
+  result.hasParameter('RateLimitSecret', { NoEcho: true, MinLength: 32 });
+  result.resourceCountIs('AWS::SecretsManager::Secret', 0);
+});
+
+void test('configures an isolated production custom domain with strict upload CORS', () => {
+  const result = template('prod');
+  result.hasResourceProperties('AWS::S3::Bucket', {
+    CorsConfiguration: {
+      CorsRules: [Match.objectLike({ AllowedOrigins: ['https://www.inspectmesh.com'] })],
+    },
+  });
+  result.hasResourceProperties('AWS::CertificateManager::Certificate', {
+    DomainName: 'www.inspectmesh.com',
+    SubjectAlternativeNames: ['inspectmesh.com'],
+  });
+  result.hasResourceProperties('AWS::CloudFront::Distribution', {
+    DistributionConfig: Match.objectLike({
+      Aliases: ['www.inspectmesh.com', 'inspectmesh.com'],
+    }),
+  });
+  result.resourceCountIs('AWS::Route53::RecordSet', 4);
 });
 
 void test('adds the local development frontend to a configured upload origin', () => {
