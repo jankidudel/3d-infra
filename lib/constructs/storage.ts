@@ -1,6 +1,7 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { BlockPublicAccess, Bucket, BucketEncryption, HttpMethods } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { stages } from '../stages';
 
 export const JOBS_PREFIX = 'jobs/';
 export const JOB_INPUT_SUFFIX = '/input.stl';
@@ -18,7 +19,7 @@ export class Storage extends Construct {
 
   public constructor(scope: Construct, id: string, props: StorageProps) {
     super(scope, id);
-    const isDev = props.stage === 'dev';
+    const isDev = props.stage === stages.development;
     const allowedOrigins = [
       ...(props.corsOrigin ? [props.corsOrigin] : []),
       ...(isDev && props.corsOrigin !== '*' ? ['http://localhost:4200'] : []),

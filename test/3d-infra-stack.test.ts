@@ -4,20 +4,23 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { InfraStack } from '../lib/3d-infra-stack';
 import { productionDomain } from '../lib/production-domain';
+import { stages, type Stage } from '../lib/stages';
 
 const apiArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'api');
 const frontendArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'frontend');
 
-function template(stage = 'dev'): Template {
+function template(stage: Stage = stages.development): Template {
   const stack = new InfraStack(new App(), 'TestStack', {
     stage,
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
     apiArtifactPath,
     frontendArtifactPath,
-    corsOrigin: stage === 'prod' ? productionDomain.canonicalUrl : 'http://localhost:4200',
-    customDomain: stage === 'prod' ? productionDomain : undefined,
+    corsOrigin:
+      stage === stages.production ? productionDomain.canonicalUrl : 'http://localhost:4200',
+    customDomain: stage === stages.production ? productionDomain : undefined,
+    googleSiteVerification: stage === stages.production ? 'test-verification-token' : undefined,
     webAclArn:
-      stage === 'dev'
+      stage === stages.development
         ? 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/dev/example'
         : undefined,
   });
@@ -53,7 +56,7 @@ void test('retains the configured Web ACL on the CloudFront distribution', () =>
 });
 
 void test('configures an isolated production custom domain with strict upload CORS', () => {
-  const result = template('prod');
+  const result = template(stages.production);
   result.hasResourceProperties('AWS::S3::Bucket', {
     CorsConfiguration: {
       CorsRules: [Match.objectLike({ AllowedOrigins: ['https://www.inspectmesh.com'] })],
@@ -85,12 +88,16 @@ void test('configures an isolated production custom domain with strict upload CO
     FunctionConfig: { Runtime: 'cloudfront-js-2.0' },
     FunctionCode: Match.stringLikeRegexp('request\\.rawQueryString\\(\\)'),
   });
-  result.resourceCountIs('AWS::Route53::RecordSet', 4);
+  result.resourceCountIs('AWS::Route53::RecordSet', 5);
+  result.hasResourceProperties('AWS::Route53::RecordSet', {
+    Type: 'TXT',
+    ResourceRecords: ['"google-site-verification=test-verification-token"'],
+  });
 });
 
 void test('adds the local development frontend to a configured upload origin', () => {
   const stack = new InfraStack(new App(), 'CorsStack', {
-    stage: 'dev',
+    stage: stages.development,
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
     apiArtifactPath,
     frontendArtifactPath,
@@ -110,7 +117,7 @@ void test('adds the local development frontend to a configured upload origin', (
 });
 
 void test('deletes newly created logs on rollback and otherwise retains them', () => {
-  template('dev').hasResource('AWS::Logs::LogGroup', {
+  template(stages.development).hasResource('AWS::Logs::LogGroup', {
     DeletionPolicy: 'RetainExceptOnCreate',
     UpdateReplacePolicy: 'Retain',
   });
@@ -178,7 +185,7 @@ void test('creates the configured .NET processor and event mapping', () => {
 });
 void test('creates an email-notified monthly budget when configured', () => {
   const stack = new InfraStack(new App(), 'BudgetStack', {
-    stage: 'dev',
+    stage: stages.development,
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
     apiArtifactPath,
     frontendArtifactPath,
@@ -224,7 +231,7 @@ void test('routes only job input object-created events to SQS', () => {
 
 void test('creates API failure monitoring alarms and optional email notifications', () => {
   const stack = new InfraStack(new App(), 'AlarmStack', {
-    stage: 'dev',
+    stage: stages.development,
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
     apiArtifactPath,
     frontendArtifactPath,
@@ -306,7 +313,7 @@ void test('creates TTL rate-limit storage and grants conditional read/write acce
 
 void test('keeps a default stage throttle for the API', () => {
   const stack = new InfraStack(new App(), 'RateLimitStack', {
-    stage: 'dev',
+    stage: stages.development,
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
     apiArtifactPath,
     frontendArtifactPath,

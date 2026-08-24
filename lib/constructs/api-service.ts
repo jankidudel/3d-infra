@@ -15,6 +15,7 @@ import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import { JOB_INPUT_SUFFIX, JOB_METADATA_SUFFIX, JOBS_PREFIX } from './storage';
+import { stages } from '../stages';
 
 const CREATE_JOB_PATH = '/api/v1/jobs';
 
@@ -42,7 +43,7 @@ export class ApiService extends Construct {
       retention: RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
     });
-    const isDev = props.stage === 'dev';
+    const isDev = props.stage === stages.development;
     this.rateLimitTable = new Table(this, 'RateLimitTable', {
       tableName: `3d-api-rate-limits-${props.stage}`,
       partitionKey: { name: 'windowKey', type: AttributeType.STRING },

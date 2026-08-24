@@ -13,13 +13,20 @@ import {
   FunctionRuntime,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
-import { ARecord, AaaaRecord, PublicHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
+import {
+  ARecord,
+  AaaaRecord,
+  PublicHostedZone,
+  RecordTarget,
+  TxtRecord,
+} from 'aws-cdk-lib/aws-route53';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Construct } from 'constructs';
 import { ApiService } from './api-service';
 import { productionDomain } from '../production-domain';
+import { stages } from '../stages';
 import { spaRewriteFunctionCode } from './spa-rewrite-function';
 
 export interface FrontendHostingProps {
@@ -27,6 +34,7 @@ export interface FrontendHostingProps {
   readonly artifactPath: string;
   readonly api: ApiService;
   readonly customDomain?: typeof productionDomain;
+  readonly googleSiteVerification?: string;
   readonly webAclArn?: string;
 }
 
@@ -37,7 +45,7 @@ export class FrontendHosting extends Construct {
 
   public constructor(scope: Construct, id: string, props: FrontendHostingProps) {
     super(scope, id);
-    const isDev = props.stage === 'dev';
+    const isDev = props.stage === stages.development;
     this.bucket = new Bucket(this, 'Bucket', {
       encryption: BucketEncryption.S3_MANAGED,
       enforceSSL: true,
@@ -129,6 +137,12 @@ export class FrontendHosting extends Construct {
         recordName: 'www',
         target,
       });
+      if (props.googleSiteVerification) {
+        new TxtRecord(this, 'GoogleSiteVerificationRecord', {
+          zone: hostedZone,
+          values: [`google-site-verification=${props.googleSiteVerification}`],
+        });
+      }
     }
     new BucketDeployment(this, 'Deployment', {
       destinationBucket: this.bucket,

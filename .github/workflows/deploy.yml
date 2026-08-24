@@ -49,6 +49,7 @@ jobs:
       MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
       CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
       CLOUDFRONT_WEB_ACL_ARN: ${{ vars.CLOUDFRONT_WEB_ACL_ARN }}
+      GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
     steps:
       - name: Check out infrastructure
         uses: actions/checkout@v6
@@ -80,6 +81,10 @@ jobs:
           fi
           if [ "$STAGE" = "dev" ] && [ -z "$CLOUDFRONT_WEB_ACL_ARN" ]; then
             echo "::error::CLOUDFRONT_WEB_ACL_ARN is required for the dev CloudFront pricing plan."
+            exit 1
+          fi
+          if [ "$STAGE" = "prod" ] && [ -z "$GOOGLE_SITE_VERIFICATION" ]; then
+            echo "::error::GOOGLE_SITE_VERIFICATION is not available. Add it as a variable in the prod GitHub Environment."
             exit 1
           fi
 
