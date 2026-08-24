@@ -66,7 +66,24 @@ void test('configures an isolated production custom domain with strict upload CO
   result.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: Match.objectLike({
       Aliases: ['www.inspectmesh.com', 'inspectmesh.com'],
+      DefaultCacheBehavior: Match.objectLike({
+        FunctionAssociations: Match.arrayWith([
+          Match.objectLike({ EventType: 'viewer-request', FunctionARN: Match.anyValue() }),
+        ]),
+      }),
+      CacheBehaviors: Match.arrayWith([
+        Match.objectLike({
+          PathPattern: 'api/*',
+          FunctionAssociations: Match.arrayWith([
+            Match.objectLike({ EventType: 'viewer-request', FunctionARN: Match.anyValue() }),
+          ]),
+        }),
+      ]),
     }),
+  });
+  result.hasResourceProperties('AWS::CloudFront::Function', {
+    FunctionConfig: { Runtime: 'cloudfront-js-2.0' },
+    FunctionCode: Match.stringLikeRegexp('request\\.rawQueryString\\(\\)'),
   });
   result.resourceCountIs('AWS::Route53::RecordSet', 4);
 });

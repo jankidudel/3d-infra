@@ -10,6 +10,7 @@ import {
   Function as CfFunction,
   FunctionCode,
   FunctionEventType,
+  FunctionRuntime,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { ARecord, AaaaRecord, PublicHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
@@ -19,6 +20,7 @@ import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { Construct } from 'constructs';
 import { ApiService } from './api-service';
 import { productionDomain } from '../production-domain';
+import { spaRewriteFunctionCode } from './spa-rewrite-function';
 
 export interface FrontendHostingProps {
   readonly stage: string;
@@ -58,20 +60,15 @@ export class FrontendHosting extends Construct {
           })
         : undefined;
 
-    // Resolve clean URLs to Angular's prerendered HTML. The default behavior is
-    // deliberately uncached, so rewritten HTML never inherits the asset policy.
+    // Resolve clean URLs to Angular's prerendered HTML. Production also redirects
+    // the apex hostname before rewriting, using the raw query string verbatim.
     const spaRewrite = new CfFunction(this, 'SpaRewriteFunction', {
-      code: FunctionCode.fromInline(`function handler(event) {
-        var request = event.request;
-        ${props.customDomain ? `if (request.headers.host.value === '${props.customDomain.apexDomain}') { return { statusCode: 301, statusDescription: 'Moved Permanently', headers: { location: { value: '${props.customDomain.canonicalUrl}' + request.uri + (request.querystring ? '?' + request.querystring : '') } } }; }` : ''}
-        var uri = request.uri;
-        if (uri.includes('.')) { return request; }
-        if (uri === '/') { request.uri = '/index.html'; return request; }
-        if (uri.endsWith('/')) { uri = uri.slice(0, -1); }
-        request.uri = uri + '/index.html';
-        return request;
-      }`),
+      code: FunctionCode.fromInline(spaRewriteFunctionCode(props.customDomain)),
+      runtime: props.customDomain ? FunctionRuntime.JS_2_0 : FunctionRuntime.JS_1_0,
     });
+    const apexRedirectAssociation = props.customDomain
+      ? [{ eventType: FunctionEventType.VIEWER_REQUEST, function: spaRewrite }]
+      : undefined;
 
     const frontendOrigin = S3BucketOrigin.withOriginAccessControl(this.bucket);
     // Free CloudFront pricing plans permit managed, but not custom, response-header policies.
@@ -98,12 +95,14 @@ export class FrontendHosting extends Construct {
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: CachePolicy.CACHING_OPTIMIZED,
           responseHeadersPolicy,
+          functionAssociations: apexRedirectAssociation,
         },
         '*.css': {
           origin: frontendOrigin,
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: CachePolicy.CACHING_OPTIMIZED,
           responseHeadersPolicy,
+          functionAssociations: apexRedirectAssociation,
         },
         'api/*': {
           origin: new HttpOrigin(apiDomain),
@@ -112,6 +111,7 @@ export class FrontendHosting extends Construct {
           cachePolicy: CachePolicy.CACHING_DISABLED,
           originRequestPolicy: OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
           responseHeadersPolicy,
+          functionAssociations: apexRedirectAssociation,
         },
       },
     });
