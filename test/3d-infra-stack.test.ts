@@ -282,8 +282,8 @@ void test('creates a throttled HTTP API Lambda with scoped storage access', () =
     StageName: '$default',
     AutoDeploy: true,
     DefaultRouteSettings: {
-      ThrottlingBurstLimit: 10,
-      ThrottlingRateLimit: 5,
+      ThrottlingBurstLimit: 1,
+      ThrottlingRateLimit: 1,
     },
   });
   result.hasResourceProperties('AWS::ApiGatewayV2::Route', {
@@ -311,7 +311,18 @@ void test('creates TTL rate-limit storage and grants conditional read/write acce
   });
 });
 
-void test('keeps a default stage throttle for the API', () => {
+void test('uses a higher API throttle in production', () => {
+  template(stages.production).hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+    StageName: '$default',
+    AutoDeploy: true,
+    DefaultRouteSettings: {
+      ThrottlingBurstLimit: 4,
+      ThrottlingRateLimit: 2,
+    },
+  });
+});
+
+void test('allows the API throttle defaults to be overridden', () => {
   const stack = new InfraStack(new App(), 'RateLimitStack', {
     stage: stages.development,
     artifactPath: path.join(process.cwd(), 'test', 'fixtures', 'processor'),
@@ -323,8 +334,8 @@ void test('keeps a default stage throttle for the API', () => {
 
   Template.fromStack(stack).hasResourceProperties('AWS::ApiGatewayV2::Stage', {
     DefaultRouteSettings: {
-      ThrottlingBurstLimit: 10,
-      ThrottlingRateLimit: 5,
+      ThrottlingBurstLimit: 4,
+      ThrottlingRateLimit: 0.5,
     },
   });
 });

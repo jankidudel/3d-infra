@@ -19,7 +19,8 @@ terminal failure results live in S3. The Go API runs in Lambda behind a throttle
 HTTP API. CloudFront serves the private frontend bucket and proxies `/api/*` to
 API Gateway.
 
-API Gateway allows 5 requests per second with a burst of 10; rejected requests
+API Gateway allows development traffic at 1 request per second with a burst of 1,
+and production traffic at 2 requests per second with a burst of 4; rejected requests
 receive HTTP 429 before Lambda runs or an S3 upload form is issued. Reserved
 concurrency is not configured for the API Lambda because accounts with small
 concurrency quotas must retain AWS's minimum unreserved pool. These API Gateway
@@ -105,8 +106,8 @@ work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and
 | Monthly budget (USD)   | `monthlyBudgetUsd`      | `MONTHLY_BUDGET_USD`      | `10` when alerts are enabled          |
 | Budget alert email     | `budgetAlertEmail`      | `BUDGET_ALERT_EMAIL`      | disabled when omitted                 |
 | Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted     |
-| Create-job burst limit | `createJobBurstLimit`   | `CREATE_JOB_BURST_LIMIT`  | `2`                                   |
-| Create-job rate/second | `createJobRateLimit`    | `CREATE_JOB_RATE_LIMIT`   | `1`                                   |
+| Create-job burst limit | `createJobBurstLimit`   | `CREATE_JOB_BURST_LIMIT`  | `1` (dev), `4` (prod)                 |
+| Create-job rate/second | `createJobRateLimit`    | `CREATE_JOB_RATE_LIMIT`   | `1` (dev), `2` (prod)                 |
 
 Development always permits uploads from `http://localhost:4200`, including when another
 non-wildcard `CORS_ORIGIN` is configured. Production CORS is fixed to

@@ -99,11 +99,15 @@ export class ApiService extends Construct {
       methods: [HttpMethod.POST],
       integration,
     });
+    const throttle = {
+      burstLimit: props.createJobBurstLimit ?? (isDev ? 1 : 4), // @todo: increase to 10 once we have a better understanding of the load on the API
+      rateLimit: props.createJobRateLimit ?? (isDev ? 1 : 2), // @todo: increase to 5 once we have a better understanding of the load on the API
+    };
     this.stage = new HttpStage(this, 'DefaultStage', {
       httpApi: this.api,
       stageName: '$default',
       autoDeploy: true,
-      throttle: { burstLimit: 10, rateLimit: 5 },
+      throttle,
     });
     const cfnStage = this.stage.node.defaultChild as CfnStage;
     cfnStage.routeSettings = {};
