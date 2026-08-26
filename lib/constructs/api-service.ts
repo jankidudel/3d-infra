@@ -14,7 +14,12 @@ import { FilterPattern, LogGroup, MetricFilter, RetentionDays } from 'aws-cdk-li
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
-import { JOB_INPUT_SUFFIX, JOB_METADATA_SUFFIX, JOBS_PREFIX } from './storage';
+import {
+  JOB_INPUT_SUFFIX,
+  JOB_METADATA_SUFFIX,
+  JOBS_PREFIX,
+  THREE_MF_JOB_INPUT_SUFFIX,
+} from './storage';
 import { stages } from '../stages';
 
 const CREATE_JOB_PATH = '/api/v1/jobs';
@@ -61,6 +66,7 @@ export class ApiService extends Construct {
       timeout: Duration.seconds(15),
       environment: {
         S3_BUCKET: props.bucket.bucketName,
+        ENABLE_API_DOCUMENTATION: isDev ? 'true' : 'false',
         RATE_LIMIT_TABLE: this.rateLimitTable.tableName,
         RATE_LIMIT_SECRET: props.rateLimitSecret,
       },
@@ -80,6 +86,7 @@ export class ApiService extends Construct {
     });
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${THREE_MF_JOB_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
     this.function.addToRolePolicy(
       new PolicyStatement({

@@ -12,7 +12,12 @@ import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { PROCESSOR_TIMEOUT_SECONDS } from './processing-queue';
-import { JOB_INPUT_SUFFIX, JOB_REPORT_SUFFIX, JOBS_PREFIX } from './storage';
+import {
+  JOB_INPUT_SUFFIX,
+  JOB_REPORT_SUFFIX,
+  JOBS_PREFIX,
+  THREE_MF_JOB_INPUT_SUFFIX,
+} from './storage';
 
 export interface ProcessorLambdaProps {
   readonly stage: string;
@@ -46,6 +51,7 @@ export class ProcessorLambda extends Construct {
       insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
     });
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
+    props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${THREE_MF_JOB_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_REPORT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*/failure.json`);
     this.function.addEventSource(

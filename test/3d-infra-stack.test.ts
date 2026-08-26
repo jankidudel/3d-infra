@@ -303,6 +303,17 @@ void test('creates a throttled HTTP API Lambda with scoped storage access', () =
   });
 });
 
+void test('enables API documentation outside production only', () => {
+  template(stages.development).hasResourceProperties('AWS::Lambda::Function', {
+    FunctionName: '3d-api-dev',
+    Environment: { Variables: Match.objectLike({ ENABLE_API_DOCUMENTATION: 'true' }) },
+  });
+  template(stages.production).hasResourceProperties('AWS::Lambda::Function', {
+    FunctionName: '3d-api-prod',
+    Environment: { Variables: Match.objectLike({ ENABLE_API_DOCUMENTATION: 'false' }) },
+  });
+});
+
 void test('creates TTL rate-limit storage and grants conditional read/write access to the API', () => {
   const result = template();
   result.hasResourceProperties('AWS::DynamoDB::Table', {

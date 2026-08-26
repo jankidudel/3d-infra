@@ -65,16 +65,14 @@ export class InfraStack extends Stack {
       memorySize: props.processorMemory,
       logRetention: RetentionDays.ONE_WEEK,
     });
-    storage.bucket.addEventNotification(
-      EventType.OBJECT_CREATED,
-      new SqsDestination(processing.queue),
-      { prefix: JOBS_PREFIX, suffix: JOB_INPUT_SUFFIX },
-    );
-    storage.bucket.addEventNotification(
-      EventType.OBJECT_CREATED,
-      new SqsDestination(processing.queue),
-      { prefix: JOBS_PREFIX, suffix: THREE_MF_JOB_INPUT_SUFFIX },
-    );
+    const jobInputSuffixes = [JOB_INPUT_SUFFIX, THREE_MF_JOB_INPUT_SUFFIX];
+    for (const suffix of jobInputSuffixes) {
+      storage.bucket.addEventNotification(
+        EventType.OBJECT_CREATED,
+        new SqsDestination(processing.queue),
+        { prefix: JOBS_PREFIX, suffix },
+      );
+    }
     const api = new ApiService(this, 'Api', {
       stage: props.stage,
       bucket: storage.bucket,
