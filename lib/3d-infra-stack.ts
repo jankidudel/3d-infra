@@ -16,7 +16,12 @@ import { Topic } from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import { ProcessingQueue, PROCESSOR_TIMEOUT_SECONDS } from './constructs/processing-queue';
 import { ProcessorLambda } from './constructs/processor-lambda';
-import { JOB_INPUT_SUFFIX, JOBS_PREFIX, Storage } from './constructs/storage';
+import {
+  JOB_INPUT_SUFFIX,
+  JOBS_PREFIX,
+  Storage,
+  THREE_MF_JOB_INPUT_SUFFIX,
+} from './constructs/storage';
 import { ApiService } from './constructs/api-service';
 import { FrontendHosting } from './constructs/frontend-hosting';
 import { productionDomain } from './production-domain';
@@ -64,6 +69,11 @@ export class InfraStack extends Stack {
       EventType.OBJECT_CREATED,
       new SqsDestination(processing.queue),
       { prefix: JOBS_PREFIX, suffix: JOB_INPUT_SUFFIX },
+    );
+    storage.bucket.addEventNotification(
+      EventType.OBJECT_CREATED,
+      new SqsDestination(processing.queue),
+      { prefix: JOBS_PREFIX, suffix: THREE_MF_JOB_INPUT_SUFFIX },
     );
     const api = new ApiService(this, 'Api', {
       stage: props.stage,

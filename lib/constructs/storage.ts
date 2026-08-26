@@ -5,6 +5,7 @@ import { stages } from '../stages';
 
 export const JOBS_PREFIX = 'jobs/';
 export const JOB_INPUT_SUFFIX = '/input.stl';
+export const THREE_MF_JOB_INPUT_SUFFIX = '/input.3mf';
 export const JOB_METADATA_SUFFIX = '/metadata.json';
 export const JOB_REPORT_SUFFIX = '/report.json';
 

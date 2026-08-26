@@ -211,7 +211,7 @@ void test('creates an email-notified monthly budget when configured', () => {
 void test('routes only job input object-created events to SQS', () => {
   template().hasResourceProperties('Custom::S3BucketNotifications', {
     NotificationConfiguration: {
-      QueueConfigurations: [
+      QueueConfigurations: Match.arrayWith([
         Match.objectLike({
           Events: ['s3:ObjectCreated:*'],
           Filter: {
@@ -224,7 +224,19 @@ void test('routes only job input object-created events to SQS', () => {
           },
           QueueArn: Match.anyValue(),
         }),
-      ],
+        Match.objectLike({
+          Events: ['s3:ObjectCreated:*'],
+          Filter: {
+            Key: {
+              FilterRules: [
+                { Name: 'suffix', Value: '/input.3mf' },
+                { Name: 'prefix', Value: 'jobs/' },
+              ],
+            },
+          },
+          QueueArn: Match.anyValue(),
+        }),
+      ]),
     },
   });
 });
