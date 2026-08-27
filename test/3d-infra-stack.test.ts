@@ -251,7 +251,7 @@ void test('creates API failure monitoring alarms and optional email notification
   });
   const result = Template.fromStack(stack);
 
-  result.resourceCountIs('AWS::CloudWatch::Alarm', 8);
+  result.resourceCountIs('AWS::CloudWatch::Alarm', 5);
   result.hasResourceProperties('AWS::CloudWatch::Alarm', {
     AlarmName: '3d-processing-dlq-messages-dev',
     Threshold: 1,
@@ -266,6 +266,20 @@ void test('creates API failure monitoring alarms and optional email notification
     MetricTransformations: [
       { MetricNamespace: '3DQuality/API', MetricName: 'ApplicationErrors', MetricValue: '1' },
     ],
+  });
+  result.hasResourceProperties('AWS::Logs::MetricFilter', {
+    FilterPattern: 'ERROR',
+    MetricTransformations: [
+      {
+        MetricNamespace: '3DQuality/Processor',
+        MetricName: 'ApplicationErrors',
+        MetricValue: '1',
+      },
+    ],
+  });
+  result.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    AlarmName: '3d-processor-application-errors-dev',
+    Threshold: 1,
   });
   result.hasResourceProperties('AWS::CloudWatch::Alarm', {
     AlarmName: '3d-api-application-errors-dev',

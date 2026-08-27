@@ -1,13 +1,9 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
-import {
-  Architecture,
-  Code,
-  Function as LambdaFunction,
-  Runtime,
-  LambdaInsightsVersion,
-} from 'aws-cdk-lib/aws-lambda';
+import { Metric, Stats } from 'aws-cdk-lib/aws-cloudwatch';
+import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
+// import { LambdaInsightsVersion } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { FilterPattern, LogGroup, MetricFilter, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
@@ -30,6 +26,8 @@ export interface ProcessorLambdaProps {
 
 export class ProcessorLambda extends Construct {
   public readonly function: LambdaFunction;
+  public readonly applicationErrors: Metric;
+
   public constructor(scope: Construct, id: string, props: ProcessorLambdaProps) {
     super(scope, id);
     const functionName = `3d-processor-${props.stage}`;
@@ -48,7 +46,19 @@ export class ProcessorLambda extends Construct {
       timeout: Duration.seconds(PROCESSOR_TIMEOUT_SECONDS),
       environment: { STORAGE_BUCKET_NAME: props.bucket.bucketName, JOBS_PREFIX },
       logGroup,
-      insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
+      // Re-enable Lambda Insights only after reviewing its custom-metric cost.
+      // insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
+    });
+    const applicationErrors = new MetricFilter(this, 'ApplicationErrors', {
+      logGroup,
+      filterPattern: FilterPattern.literal('ERROR'),
+      metricNamespace: '3DQuality/Processor',
+      metricName: 'ApplicationErrors',
+      metricValue: '1',
+    });
+    this.applicationErrors = applicationErrors.metric({
+      statistic: Stats.SUM,
+      period: Duration.minutes(5),
     });
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${THREE_MF_JOB_INPUT_SUFFIX}`);

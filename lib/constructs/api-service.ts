@@ -1,13 +1,8 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { CfnStage, HttpApi, HttpMethod, HttpStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import {
-  Architecture,
-  Code,
-  Function as LambdaFunction,
-  Runtime,
-  LambdaInsightsVersion,
-} from 'aws-cdk-lib/aws-lambda';
+import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
+// import { LambdaInsightsVersion } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Metric, Stats } from 'aws-cdk-lib/aws-cloudwatch';
 import { FilterPattern, LogGroup, MetricFilter, RetentionDays } from 'aws-cdk-lib/aws-logs';
@@ -71,7 +66,8 @@ export class ApiService extends Construct {
         RATE_LIMIT_SECRET: props.rateLimitSecret,
       },
       logGroup,
-      insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
+      // Re-enable Lambda Insights only after reviewing its custom-metric cost.
+      // insightsVersion: LambdaInsightsVersion.VERSION_1_0_498_0,
     });
     const applicationErrors = new MetricFilter(this, 'ApplicationErrors', {
       logGroup,

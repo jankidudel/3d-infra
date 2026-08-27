@@ -106,6 +106,7 @@ export class InfraStack extends Stack {
         comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: TreatMissingData.NOT_BREACHING,
       }),
+      /* Disabled to keep dev and prod within the shared 10-alarm free allowance.
       new Alarm(this, 'ProcessorThrottlesAlarm', {
         alarmName: `3d-processor-throttles-${props.stage}`,
         metric: processor.function.metricThrottles({ period: Duration.minutes(5) }),
@@ -114,6 +115,16 @@ export class InfraStack extends Stack {
         comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: TreatMissingData.NOT_BREACHING,
       }),
+      */
+      new Alarm(this, 'ProcessorApplicationErrorsAlarm', {
+        alarmName: `3d-processor-application-errors-${props.stage}`,
+        metric: processor.applicationErrors,
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: TreatMissingData.NOT_BREACHING,
+      }),
+      /* Disabled to keep dev and prod within the shared 10-alarm free allowance.
       new Alarm(this, 'ProcessorDurationAlarm', {
         alarmName: `3d-processor-duration-${props.stage}`,
         metric: processor.function.metricDuration({
@@ -125,6 +136,7 @@ export class InfraStack extends Stack {
         comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: TreatMissingData.NOT_BREACHING,
       }),
+      */
       new Alarm(this, 'ProcessingQueueAgeAlarm', {
         alarmName: `3d-processing-queue-age-${props.stage}`,
         metric: processing.queue.metricApproximateAgeOfOldestMessage({
@@ -145,6 +157,7 @@ export class InfraStack extends Stack {
         comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: TreatMissingData.NOT_BREACHING,
       }),
+      /* Disabled to keep dev and prod within the shared 10-alarm free allowance.
       new Alarm(this, 'ApiErrorsAlarm', {
         alarmName: `3d-api-errors-${props.stage}`,
         metric: api.function.metricErrors({ period: Duration.minutes(5) }),
@@ -161,6 +174,7 @@ export class InfraStack extends Stack {
         comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         treatMissingData: TreatMissingData.NOT_BREACHING,
       }),
+      */
       new Alarm(this, 'ApiApplicationErrorsAlarm', {
         alarmName: `3d-api-application-errors-${props.stage}`,
         metric: api.applicationErrors,
@@ -189,6 +203,18 @@ export class InfraStack extends Stack {
                 label: 'API Gateway 5XX Errors',
               }),
               api.applicationErrors.with({ label: 'Application Errors' }),
+            ],
+          }),
+        ],
+        [
+          new GraphWidget({
+            title: '3D processor failures',
+            left: [
+              processor.function.metricErrors({
+                period: Duration.minutes(5),
+                label: 'Lambda Errors',
+              }),
+              processor.applicationErrors.with({ label: 'Application Errors' }),
             ],
           }),
         ],
