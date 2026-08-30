@@ -151,9 +151,10 @@ aws cloudfront create-invalidation \
   --paths '/*'
 ```
 
-The production CloudFront pricing plan manages the required WAF Web ACL association
-outside CloudFormation. The stack must not create, associate, replace, or remove that
-ACL. The development distribution remains pay-as-you-go and has no Web ACL. In
+Production references its existing CloudFront-scope WAF Web ACL through the
+`CLOUDFRONT_WEB_ACL_ARN` GitHub Environment variable. The stack does not create the
+ACL. Keep this ARN unchanged while the distribution has a CloudFront pricing plan.
+The development distribution remains pay-as-you-go and has no Web ACL. In
 **3d-prod CloudFront - Manage plan**, select the Free plan and attach the
 `inspectmesh.com` hosted zone in the same account to the distribution using that
 domain.
@@ -238,6 +239,7 @@ Set the following environment variables in both environments as appropriate:
 | `AWS_ACCOUNT_ID`         | Variable | Expected AWS account; prevents accidental cross-account deployment       |
 | `MONTHLY_BUDGET_USD`     | Variable | Monthly project budget; for example `10`                                 |
 | `CORS_ORIGIN`            | Variable | Optional development upload origin; production is fixed in CDK           |
+| `CLOUDFRONT_WEB_ACL_ARN` | Variable | Existing CloudFront-scope WAF Web ACL ARN; required only in `prod`       |
 | `BUDGET_ALERT_EMAIL`     | Variable | Recipient for AWS Budget notifications                                   |
 | `OPERATIONS_ALERT_EMAIL` | Variable | Recipient for CloudWatch alarm notifications                             |
 | `RATE_LIMIT_SECRET`      | Secret   | Random, stage-specific rate-limit signing secret; at least 32 characters |
