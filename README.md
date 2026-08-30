@@ -140,16 +140,33 @@ CloudFront serves Angular's prerendered HTML for clean routes such as
 `/stl-quality-check` without caching HTML responses. Hashed JavaScript and CSS
 assets use CloudFront's managed optimized cache policy (24-hour default TTL and
 one-year maximum), while `/api/*` is forwarded to API Gateway with caching disabled.
-No custom cache policy is created, keeping the distribution compatible with
-CloudFront flat-rate tiers that do not include custom caching rules. Each frontend
-deployment invalidates `/*` automatically. To clear the distribution manually, use
-the `FrontendDistributionId` stack output:
+No custom cache policy is created. The development distribution uses CloudFront
+pay-as-you-go pricing; its `/api/*` behavior remains a CloudFront-to-API-Gateway
+proxy. Each frontend deployment invalidates `/*` automatically. To clear the
+distribution manually, use the `FrontendDistributionId` stack output:
 
 ```sh
 aws cloudfront create-invalidation \
   --distribution-id DISTRIBUTION_ID \
   --paths '/*'
 ```
+
+Production creates and associates a dedicated CloudFront-scope WAF Web ACL named
+`3d-prod-cloudfront`. Its only rule blocks a source IP after 150 requests in a
+rolling five-minute period when the URI starts with `/api/`. The development
+distribution remains pay-as-you-go and has no Web ACL. CloudFront's Free-plan
+subscription and hosted-zone attachment are account-plan settings, not CloudFormation
+resources: in **3d-prod CloudFront - Manage plan**, select the Free plan and attach
+the `inspectmesh.com` hosted zone in the same account to the distribution using that
+domain.
+
+The API's default `execute-api` hostname remains public because it is currently the
+CloudFront API origin. It can bypass the CloudFront WAF. Do not disable it until a
+production API custom domain has been created, mapped to the `$default` stage, used
+as the CloudFront `api/*` origin, and verified with a job creation and direct S3
+POST upload. Then disable the default execute-api endpoint in a separate deployment.
+API Gateway throttling and the application DynamoDB quotas remain active on either
+path.
 
 ## Code quality and pre-commit checks
 
@@ -225,7 +242,6 @@ Set the following environment variables in both environments as appropriate:
 | `CORS_ORIGIN`            | Variable | Optional development upload origin; production is fixed in CDK           |
 | `BUDGET_ALERT_EMAIL`     | Variable | Recipient for AWS Budget notifications                                   |
 | `OPERATIONS_ALERT_EMAIL` | Variable | Recipient for CloudWatch alarm notifications                             |
-| `CLOUDFRONT_WEB_ACL_ARN` | Variable | Required dev pricing-plan WAF Web ACL ARN                                |
 | `RATE_LIMIT_SECRET`      | Secret   | Random, stage-specific rate-limit signing secret; at least 32 characters |
 
 If the component repositories are public, the workflow's normal GitHub token can read

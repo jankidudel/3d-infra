@@ -24,7 +24,9 @@ import {
 } from './constructs/storage';
 import { ApiService } from './constructs/api-service';
 import { FrontendHosting } from './constructs/frontend-hosting';
+import { ProductionWebAcl } from './constructs/production-web-acl';
 import { productionDomain } from './production-domain';
+import { stages } from './stages';
 
 export interface InfraStackProps extends StackProps {
   readonly stage: string;
@@ -40,12 +42,15 @@ export interface InfraStackProps extends StackProps {
   readonly createJobRateLimit?: number;
   readonly customDomain?: typeof productionDomain;
   readonly googleSiteVerification?: string;
-  readonly webAclArn?: string;
 }
 
 export class InfraStack extends Stack {
   public constructor(scope: Construct, id: string, props: InfraStackProps) {
     super(scope, id, props);
+    const productionWebAcl =
+      props.stage === stages.production
+        ? new ProductionWebAcl(this, 'ProductionWebAcl')
+        : undefined;
     const storage = new Storage(this, 'Storage', {
       stage: props.stage,
       corsOrigin: props.corsOrigin,
@@ -87,7 +92,7 @@ export class InfraStack extends Stack {
       api,
       customDomain: props.customDomain,
       googleSiteVerification: props.googleSiteVerification,
-      webAclArn: props.webAclArn,
+      webAclArn: productionWebAcl?.arn,
     });
     const alarmTopic = props.operationsAlertEmail
       ? new Topic(this, 'OperationsAlarmTopic', {

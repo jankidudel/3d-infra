@@ -19,10 +19,6 @@ function template(stage: Stage = stages.development): Template {
       stage === stages.production ? productionDomain.canonicalUrl : 'http://localhost:4200',
     customDomain: stage === stages.production ? productionDomain : undefined,
     googleSiteVerification: stage === stages.production ? 'test-verification-token' : undefined,
-    webAclArn:
-      stage === stages.development
-        ? 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/dev/example'
-        : undefined,
   });
   return Template.fromStack(stack);
 }
@@ -47,11 +43,61 @@ void test('takes the rate-limit signing secret from a NoEcho deployment paramete
   result.resourceCountIs('AWS::SecretsManager::Secret', 0);
 });
 
-void test('retains the configured Web ACL on the CloudFront distribution', () => {
+void test('does not attach a Web ACL to the pay-as-you-go development distribution', () => {
   template().hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: {
-      WebACLId: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/dev/example',
+      WebACLId: Match.absent(),
     },
+  });
+});
+
+void test('creates a dedicated production Web ACL and associates it with the production distribution', () => {
+  const result = template(stages.production);
+  result.hasResourceProperties('AWS::CloudFront::Distribution', {
+    DistributionConfig: {
+      WebACLId: Match.anyValue(),
+    },
+  });
+  result.hasResourceProperties('AWS::WAFv2::WebACL', {
+    Name: '3d-prod-cloudfront',
+    Scope: 'CLOUDFRONT',
+    DefaultAction: { Allow: {} },
+    Rules: [
+      Match.objectLike({
+        Name: 'BlockExcessiveApiRequestsBySourceIp',
+        Priority: 0,
+        Action: { Block: {} },
+        Statement: {
+          RateBasedStatement: {
+            AggregateKeyType: 'IP',
+            EvaluationWindowSec: 300,
+            Limit: 150,
+            ScopeDownStatement: {
+              ByteMatchStatement: Match.objectLike({
+                SearchString: '/api/',
+                PositionalConstraint: 'STARTS_WITH',
+              }),
+            },
+          },
+        },
+      }),
+    ],
+  });
+  result.resourceCountIs('AWS::WAFv2::WebACL', 1);
+  template(stages.development).resourceCountIs('AWS::WAFv2::WebACL', 0);
+});
+
+void test('uses the managed disabled cache policy without forwarding viewer request data', () => {
+  template().hasResourceProperties('AWS::CloudFront::Distribution', {
+    DistributionConfig: Match.objectLike({
+      CacheBehaviors: Match.arrayWith([
+        Match.objectLike({
+          PathPattern: 'api/*',
+          CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+          OriginRequestPolicyId: Match.absent(),
+        }),
+      ]),
+    }),
   });
 });
 

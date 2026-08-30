@@ -4,7 +4,6 @@ import {
   AllowedMethods,
   CachePolicy,
   Distribution,
-  OriginRequestPolicy,
   ResponseHeadersPolicy,
   ViewerProtocolPolicy,
   Function as CfFunction,
@@ -79,7 +78,7 @@ export class FrontendHosting extends Construct {
       : undefined;
 
     const frontendOrigin = S3BucketOrigin.withOriginAccessControl(this.bucket);
-    // Free CloudFront pricing plans permit managed, but not custom, response-header policies.
+    // Use AWS's managed policy so the distribution needs no custom policy resource.
     const responseHeadersPolicy = ResponseHeadersPolicy.SECURITY_HEADERS;
     this.distribution = new Distribution(this, 'Distribution', {
       certificate,
@@ -117,7 +116,8 @@ export class FrontendHosting extends Construct {
           viewerProtocolPolicy: ViewerProtocolPolicy.HTTPS_ONLY,
           allowedMethods: AllowedMethods.ALLOW_ALL,
           cachePolicy: CachePolicy.CACHING_DISABLED,
-          originRequestPolicy: OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          // The API needs no viewer headers or query strings. CloudFront still
+          // forwards the request body and its required origin headers.
           responseHeadersPolicy,
           functionAssociations: apexRedirectAssociation,
         },
