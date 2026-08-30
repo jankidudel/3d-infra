@@ -48,7 +48,6 @@ jobs:
       OPERATIONS_ALERT_EMAIL: ${{ vars.OPERATIONS_ALERT_EMAIL }}
       MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
       CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
-      CLOUDFRONT_WEB_ACL_ARN: ${{ vars.CLOUDFRONT_WEB_ACL_ARN }}
       GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
     steps:
       - name: Check out infrastructure
@@ -77,10 +76,6 @@ jobs:
           fi
           if ! printf '%s' "$AWS_ACCOUNT_ID" | grep -Eq '^[0-9]{12}$'; then
             echo "::error::AWS_ACCOUNT_ID must be the 12-digit target AWS account ID."
-            exit 1
-          fi
-          if [ "$STAGE" = "dev" ] && [ -z "$CLOUDFRONT_WEB_ACL_ARN" ]; then
-            echo "::error::CLOUDFRONT_WEB_ACL_ARN is required for the dev CloudFront pricing plan."
             exit 1
           fi
           if [ "$STAGE" = "prod" ] && [ -z "$GOOGLE_SITE_VERIFICATION" ]; then
