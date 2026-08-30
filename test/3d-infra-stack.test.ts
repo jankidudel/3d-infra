@@ -101,6 +101,21 @@ void test('uses the managed disabled cache policy without forwarding viewer requ
   });
 });
 
+void test('serves the prerendered 404 page when S3 rejects a missing clean URL', () => {
+  template().hasResourceProperties('AWS::CloudFront::Distribution', {
+    DistributionConfig: Match.objectLike({
+      CustomErrorResponses: [
+        {
+          ErrorCode: 403,
+          ResponseCode: 404,
+          ResponsePagePath: '/404/index.html',
+          ErrorCachingMinTTL: 0,
+        },
+      ],
+    }),
+  });
+});
+
 void test('configures an isolated production custom domain with strict upload CORS', () => {
   const result = template(stages.production);
   result.hasResourceProperties('AWS::S3::Bucket', {

@@ -1,4 +1,4 @@
-import { RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Certificate, CertificateValidation } from 'aws-cdk-lib/aws-certificatemanager';
 import {
   AllowedMethods,
@@ -87,6 +87,14 @@ export class FrontendHosting extends Construct {
         : undefined,
       webAclId: props.webAclArn,
       defaultRootObject: 'index.html',
+      errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 404,
+          responsePagePath: '/404/index.html',
+          ttl: Duration.seconds(0),
+        },
+      ],
       defaultBehavior: {
         origin: frontendOrigin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
