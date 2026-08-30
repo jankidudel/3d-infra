@@ -13,14 +13,6 @@ on:
         options:
           - dev
           - prod
-      operation:
-        description: Run a normal deployment, or import the existing production WAF once
-        required: true
-        default: deploy
-        type: choice
-        options:
-          - deploy
-          - import_waf
       processor_ref:
         description: 3d-processor branch, tag, or commit
         required: true
@@ -56,7 +48,6 @@ jobs:
       OPERATIONS_ALERT_EMAIL: ${{ vars.OPERATIONS_ALERT_EMAIL }}
       MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
       CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
-      CLOUDFRONT_WEB_ACL_ARN: ${{ vars.CLOUDFRONT_WEB_ACL_ARN }}
       GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
     steps:
       - name: Check out infrastructure
@@ -85,14 +76,6 @@ jobs:
           fi
           if ! printf '%s' "$AWS_ACCOUNT_ID" | grep -Eq '^[0-9]{12}$'; then
             echo "::error::AWS_ACCOUNT_ID must be the 12-digit target AWS account ID."
-            exit 1
-          fi
-          if [ "${{ inputs.operation || 'deploy' }}" = "import_waf" ] && [ "$STAGE" != "prod" ]; then
-            echo "::error::The WAF import is only valid for the prod environment."
-            exit 1
-          fi
-          if [ "$STAGE" = "prod" ] && ! printf '%s' "$CLOUDFRONT_WEB_ACL_ARN" | grep -Eq '^arn:aws:wafv2:us-east-1:[0-9]{12}:global/webacl/[^/]+/[^/]+$'; then
-            echo "::error::CLOUDFRONT_WEB_ACL_ARN must be the existing CloudFront-scope WAF Web ACL ARN."
             exit 1
           fi
           if [ "$STAGE" = "prod" ] && [ -z "$GOOGLE_SITE_VERIFICATION" ]; then
@@ -204,7 +187,6 @@ jobs:
           npx cdk diff -c stage="$STAGE"
 
       - name: Deploy with CDK
-        if: ${{ (inputs.operation || 'deploy') == 'deploy' }}
         env:
           RATE_LIMIT_SECRET: ${{ secrets.RATE_LIMIT_SECRET }}
         working-directory: 3d-infra
@@ -219,19 +201,8 @@ jobs:
           npx cdk deploy -c stage="$STAGE" --require-approval never \
           --parameters RateLimitSecret="$RATE_LIMIT_SECRET" --outputs-file cdk-outputs.json
 
-      - name: Import existing production WAF into CloudFormation
-        if: ${{ inputs.operation == 'import_waf' }}
-        working-directory: 3d-infra
-        run: |
-          web_acl_id="${CLOUDFRONT_WEB_ACL_ARN##*/}"
-          PROCESSOR_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-processor/artifacts/3d-processor.zip" \
-          API_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-api/artifacts/3d-api.zip" \
-          FRONTEND_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-frontend/dist/3d-frontend/browser" \
-          npx cdk import ThreeDInfraprod -c stage=prod --yes \
-          --resource-mapping-inline "{\"ProductionWebAclE20EFBB5\":{\"Name\":\"3d-prod-cloudfront\",\"Id\":\"$web_acl_id\",\"Scope\":\"CLOUDFRONT\"}}"
-
       - name: Report production DNS and deployment details
-        if: ${{ inputs.environment == 'prod' && (inputs.operation || 'deploy') == 'deploy' }}
+        if: ${{ inputs.environment == 'prod' }}
         working-directory: 3d-infra
         run: |
           echo "Production canonical URL: https://www.inspectmesh.com"

@@ -156,14 +156,7 @@ single IP-based rule blocks a source after 3,000 requests in five minutes across
 whole distribution; this includes frontend assets and `/api/*`. It has no URI
 byte-match scope because that condition is not available on CloudFront's Free plan.
 
-The existing production ACL must be imported into CloudFormation once before a normal
-deployment can manage it. During that import, `CLOUDFRONT_WEB_ACL_ARN` remains a
-temporary prod GitHub Environment variable so the distribution's existing `WebACLId`
-does not change. Do not run the normal deploy workflow for the first transition: use
-`cdk import` with the existing ACL name (`3d-prod-cloudfront`), then run CloudFormation
-drift detection. After the import, update the stack to use the construct's ARN and
-remove the temporary variable. AWS permits imports only when the change set contains
-the resources being imported, so this has to be a separate operation.
+The production ACL is managed by this stack and is retained if the stack is removed.
 
 The development distribution remains pay-as-you-go and has no Web ACL. In
 **3d-prod CloudFront - Manage plan**, select the Free plan and attach the
@@ -250,7 +243,6 @@ Set the following environment variables in both environments as appropriate:
 | `AWS_ACCOUNT_ID`         | Variable | Expected AWS account; prevents accidental cross-account deployment       |
 | `MONTHLY_BUDGET_USD`     | Variable | Monthly project budget; for example `10`                                 |
 | `CORS_ORIGIN`            | Variable | Optional development upload origin; production is fixed in CDK           |
-| `CLOUDFRONT_WEB_ACL_ARN` | Variable | Existing production ACL ARN; required only for the one-time WAF import   |
 | `BUDGET_ALERT_EMAIL`     | Variable | Recipient for AWS Budget notifications                                   |
 | `OPERATIONS_ALERT_EMAIL` | Variable | Recipient for CloudWatch alarm notifications                             |
 | `RATE_LIMIT_SECRET`      | Secret   | Random, stage-specific rate-limit signing secret; at least 32 characters |
