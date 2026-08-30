@@ -24,7 +24,6 @@ import {
 } from './constructs/storage';
 import { ApiService } from './constructs/api-service';
 import { FrontendHosting } from './constructs/frontend-hosting';
-import { ProductionWebAcl } from './constructs/production-web-acl';
 import { productionDomain } from './production-domain';
 import { stages } from './stages';
 
@@ -42,15 +41,15 @@ export interface InfraStackProps extends StackProps {
   readonly createJobRateLimit?: number;
   readonly customDomain?: typeof productionDomain;
   readonly googleSiteVerification?: string;
+  readonly cloudFrontWebAclArn?: string;
 }
 
 export class InfraStack extends Stack {
   public constructor(scope: Construct, id: string, props: InfraStackProps) {
     super(scope, id, props);
-    const productionWebAcl =
-      props.stage === stages.production
-        ? new ProductionWebAcl(this, 'ProductionWebAcl')
-        : undefined;
+    if (props.stage === stages.production && !props.cloudFrontWebAclArn) {
+      throw new Error('Production requires the existing CloudFront pricing-plan Web ACL ARN.');
+    }
     const storage = new Storage(this, 'Storage', {
       stage: props.stage,
       corsOrigin: props.corsOrigin,
@@ -92,7 +91,7 @@ export class InfraStack extends Stack {
       api,
       customDomain: props.customDomain,
       googleSiteVerification: props.googleSiteVerification,
-      webAclArn: productionWebAcl?.arn,
+      webAclArn: props.cloudFrontWebAclArn,
     });
     const alarmTopic = props.operationsAlertEmail
       ? new Topic(this, 'OperationsAlarmTopic', {

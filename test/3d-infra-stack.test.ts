@@ -8,6 +8,7 @@ import { stages, type Stage } from '../lib/stages';
 
 const apiArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'api');
 const frontendArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'frontend');
+const testCloudFrontWebAclArn = 'lorem-ipsum-web-acl-arn';
 
 function template(stage: Stage = stages.development): Template {
   const stack = new InfraStack(new App(), 'TestStack', {
@@ -19,6 +20,7 @@ function template(stage: Stage = stages.development): Template {
       stage === stages.production ? productionDomain.canonicalUrl : 'http://localhost:4200',
     customDomain: stage === stages.production ? productionDomain : undefined,
     googleSiteVerification: stage === stages.production ? 'test-verification-token' : undefined,
+    cloudFrontWebAclArn: stage === stages.production ? testCloudFrontWebAclArn : undefined,
   });
   return Template.fromStack(stack);
 }
@@ -51,39 +53,14 @@ void test('does not attach a Web ACL to the pay-as-you-go development distributi
   });
 });
 
-void test('creates a dedicated production Web ACL and associates it with the production distribution', () => {
+void test('associates the existing pricing-plan Web ACL with the production distribution', () => {
   const result = template(stages.production);
   result.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: {
-      WebACLId: Match.anyValue(),
+      WebACLId: testCloudFrontWebAclArn,
     },
   });
-  result.hasResourceProperties('AWS::WAFv2::WebACL', {
-    Name: '3d-prod-cloudfront',
-    Scope: 'CLOUDFRONT',
-    DefaultAction: { Allow: {} },
-    Rules: [
-      Match.objectLike({
-        Name: 'BlockExcessiveApiRequestsBySourceIp',
-        Priority: 0,
-        Action: { Block: {} },
-        Statement: {
-          RateBasedStatement: {
-            AggregateKeyType: 'IP',
-            EvaluationWindowSec: 300,
-            Limit: 150,
-            ScopeDownStatement: {
-              ByteMatchStatement: Match.objectLike({
-                SearchString: '/api/',
-                PositionalConstraint: 'STARTS_WITH',
-              }),
-            },
-          },
-        },
-      }),
-    ],
-  });
-  result.resourceCountIs('AWS::WAFv2::WebACL', 1);
+  result.resourceCountIs('AWS::WAFv2::WebACL', 0);
   template(stages.development).resourceCountIs('AWS::WAFv2::WebACL', 0);
 });
 

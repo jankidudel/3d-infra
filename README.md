@@ -240,6 +240,7 @@ Set the following environment variables in both environments as appropriate:
 | `AWS_ACCOUNT_ID`         | Variable | Expected AWS account; prevents accidental cross-account deployment       |
 | `MONTHLY_BUDGET_USD`     | Variable | Monthly project budget; for example `10`                                 |
 | `CORS_ORIGIN`            | Variable | Optional development upload origin; production is fixed in CDK           |
+| `CLOUDFRONT_WEB_ACL_ARN` | Variable | Existing pricing-plan Web ACL ARN; required only in `prod`               |
 | `BUDGET_ALERT_EMAIL`     | Variable | Recipient for AWS Budget notifications                                   |
 | `OPERATIONS_ALERT_EMAIL` | Variable | Recipient for CloudWatch alarm notifications                             |
 | `RATE_LIMIT_SECRET`      | Secret   | Random, stage-specific rate-limit signing secret; at least 32 characters |
