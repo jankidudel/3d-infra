@@ -15,9 +15,6 @@ const configuredCorsOrigin = String(
 const googleSiteVerification = String(
   app.node.tryGetContext('googleSiteVerification') ?? process.env.GOOGLE_SITE_VERIFICATION ?? '',
 ).trim();
-const cloudFrontWebAclArn = String(
-  app.node.tryGetContext('cloudFrontWebAclArn') ?? process.env.CLOUDFRONT_WEB_ACL_ARN ?? '',
-).trim();
 if (
   stage === stages.production &&
   configuredCorsOrigin &&
@@ -28,19 +25,6 @@ if (
 if (stage === stages.production && !googleSiteVerification) {
   throw new Error(
     'GOOGLE_SITE_VERIFICATION is required for production. Add it as a variable in the prod GitHub Environment.',
-  );
-}
-if (stage === stages.production && !cloudFrontWebAclArn) {
-  throw new Error(
-    'CLOUDFRONT_WEB_ACL_ARN is required for production. Set it to the existing pricing-plan Web ACL ARN.',
-  );
-}
-if (
-  stage === stages.production &&
-  !/^arn:aws:wafv2:us-east-1:\d{12}:global\/webacl\/[^/]+\/[^/]+$/.test(cloudFrontWebAclArn)
-) {
-  throw new Error(
-    'CLOUDFRONT_WEB_ACL_ARN must be the CloudFront-scope WAF Web ACL ARN, not the CloudFront distribution ARN.',
   );
 }
 const artifactPath = String(
@@ -100,6 +84,5 @@ new InfraStack(app, `ThreeDInfra${stage}`, {
       : configuredCorsOrigin || 'http://localhost:4200',
   customDomain: stage === stages.production ? productionDomain : undefined,
   googleSiteVerification: stage === stages.production ? googleSiteVerification : undefined,
-  cloudFrontWebAclArn: stage === stages.production ? cloudFrontWebAclArn : undefined,
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
 });

@@ -8,7 +8,6 @@ import { stages, type Stage } from '../lib/stages';
 
 const apiArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'api');
 const frontendArtifactPath = path.join(process.cwd(), 'test', 'fixtures', 'frontend');
-const testCloudFrontWebAclArn = 'lorem-ipsum-web-acl-arn';
 
 function template(stage: Stage = stages.development): Template {
   const stack = new InfraStack(new App(), 'TestStack', {
@@ -20,7 +19,6 @@ function template(stage: Stage = stages.development): Template {
       stage === stages.production ? productionDomain.canonicalUrl : 'http://localhost:4200',
     customDomain: stage === stages.production ? productionDomain : undefined,
     googleSiteVerification: stage === stages.production ? 'test-verification-token' : undefined,
-    cloudFrontWebAclArn: stage === stages.production ? testCloudFrontWebAclArn : undefined,
   });
   return Template.fromStack(stack);
 }
@@ -53,11 +51,11 @@ void test('does not attach a Web ACL to the pay-as-you-go development distributi
   });
 });
 
-void test('associates the existing pricing-plan Web ACL with the production distribution', () => {
+void test('leaves the pricing-plan Web ACL association outside CloudFormation', () => {
   const result = template(stages.production);
   result.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: {
-      WebACLId: testCloudFrontWebAclArn,
+      WebACLId: Match.absent(),
     },
   });
   result.resourceCountIs('AWS::WAFv2::WebACL', 0);
