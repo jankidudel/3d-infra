@@ -23,6 +23,7 @@ import {
   THREE_MF_JOB_INPUT_SUFFIX,
 } from './constructs/storage';
 import { ApiService } from './constructs/api-service';
+import { CloudFrontWebAcl } from './constructs/cloudfront-web-acl';
 import { FrontendHosting } from './constructs/frontend-hosting';
 import { productionDomain } from './production-domain';
 import { stages } from './stages';
@@ -41,15 +42,23 @@ export interface InfraStackProps extends StackProps {
   readonly createJobRateLimit?: number;
   readonly customDomain?: typeof productionDomain;
   readonly googleSiteVerification?: string;
-  readonly cloudFrontWebAclArn?: string;
+  /**
+   * Used only while importing the existing production Web ACL. It preserves
+   * the current Distribution WebACLId during the import change set.
+   */
+  readonly existingCloudFrontWebAclArn?: string;
 }
 
 export class InfraStack extends Stack {
   public constructor(scope: Construct, id: string, props: InfraStackProps) {
     super(scope, id, props);
-    if (props.stage === stages.production && !props.cloudFrontWebAclArn) {
+    if (props.stage === stages.production && !props.existingCloudFrontWebAclArn) {
       throw new Error('Production requires the existing CloudFront pricing-plan Web ACL ARN.');
     }
+    const cloudFrontWebAcl =
+      props.stage === stages.production
+        ? new CloudFrontWebAcl(this, 'ProductionWebAcl', { stage: props.stage })
+        : undefined;
     const storage = new Storage(this, 'Storage', {
       stage: props.stage,
       corsOrigin: props.corsOrigin,
@@ -91,7 +100,10 @@ export class InfraStack extends Stack {
       api,
       customDomain: props.customDomain,
       googleSiteVerification: props.googleSiteVerification,
-      webAclArn: props.cloudFrontWebAclArn,
+      // During the one-time resource import this remains the literal existing
+      // ARN, so the import makes no change to the distribution. Replace this
+      // with cloudFrontWebAcl?.arn after that import has completed.
+      webAclArn: props.existingCloudFrontWebAclArn ?? cloudFrontWebAcl?.arn,
     });
     const alarmTopic = props.operationsAlertEmail
       ? new Topic(this, 'OperationsAlarmTopic', {

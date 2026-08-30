@@ -20,7 +20,7 @@ function template(stage: Stage = stages.development): Template {
       stage === stages.production ? productionDomain.canonicalUrl : 'http://localhost:4200',
     customDomain: stage === stages.production ? productionDomain : undefined,
     googleSiteVerification: stage === stages.production ? 'test-verification-token' : undefined,
-    cloudFrontWebAclArn: stage === stages.production ? testCloudFrontWebAclArn : undefined,
+    existingCloudFrontWebAclArn: stage === stages.production ? testCloudFrontWebAclArn : undefined,
   });
   return Template.fromStack(stack);
 }
@@ -53,14 +53,34 @@ void test('does not attach a Web ACL to the pay-as-you-go development distributi
   });
 });
 
-void test('retains the existing pricing-plan Web ACL on the production distribution', () => {
+void test('defines and retains the existing production Web ACL during its import', () => {
   const result = template(stages.production);
   result.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: {
       WebACLId: testCloudFrontWebAclArn,
     },
   });
-  result.resourceCountIs('AWS::WAFv2::WebACL', 0);
+  result.hasResourceProperties('AWS::WAFv2::WebACL', {
+    Name: '3d-prod-cloudfront',
+    Scope: 'CLOUDFRONT',
+    DefaultAction: { Allow: {} },
+    Rules: [
+      Match.objectLike({
+        Name: 'BlockExcessiveApiRequestsBySourceIp',
+        Priority: 0,
+        Action: { Block: {} },
+        Statement: {
+          RateBasedStatement: {
+            AggregateKeyType: 'IP',
+            EvaluationWindowSec: 300,
+            Limit: 3000,
+            ScopeDownStatement: Match.absent(),
+          },
+        },
+      }),
+    ],
+  });
+  result.resourceCountIs('AWS::WAFv2::WebACL', 1);
   template(stages.development).resourceCountIs('AWS::WAFv2::WebACL', 0);
 });
 
