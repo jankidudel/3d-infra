@@ -19,7 +19,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+  group: infrastructure-${{ github.event_name == 'push' && 'dev' || inputs.environment }}
   cancel-in-progress: false
 
 jobs:
@@ -61,7 +61,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24.19.0
           cache: npm
 
       - run: npm ci

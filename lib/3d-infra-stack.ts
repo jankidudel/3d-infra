@@ -13,6 +13,7 @@ import { EventType } from 'aws-cdk-lib/aws-s3';
 import { SqsDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Topic } from 'aws-cdk-lib/aws-sns';
+import { CfnGroup } from 'aws-cdk-lib/aws-resourcegroups';
 import { Construct } from 'constructs';
 import { ProcessingQueue, PROCESSOR_TIMEOUT_SECONDS } from './constructs/processing-queue';
 import { ProcessorLambda } from './constructs/processor-lambda';
@@ -47,6 +48,10 @@ export interface InfraStackProps extends StackProps {
 export class InfraStack extends Stack {
   public constructor(scope: Construct, id: string, props: InfraStackProps) {
     super(scope, id, props);
+    Tags.of(this).add('Project', 'InspectMesh');
+    Tags.of(this).add('Environment', props.stage);
+    Tags.of(this).add('ManagedBy', 'CDK');
+    Tags.of(this).add('Component', 'infra');
     const cloudFrontWebAcl =
       props.stage === stages.production
         ? new CloudFrontWebAcl(this, 'ProductionWebAcl', { stage: props.stage })
@@ -55,6 +60,7 @@ export class InfraStack extends Stack {
       stage: props.stage,
       corsOrigin: props.corsOrigin,
     });
+    Tags.of(storage).add('Component', 'infra');
     const rateLimitSecret = new CfnParameter(this, 'RateLimitSecret', {
       type: 'String',
       noEcho: true,
@@ -62,6 +68,7 @@ export class InfraStack extends Stack {
       description: 'Random rate-limit signing secret supplied by the protected GitHub Environment.',
     });
     const processing = new ProcessingQueue(this, 'Processing', { stage: props.stage });
+    Tags.of(processing).add('Component', 'infra');
     const processor = new ProcessorLambda(this, 'Processor', {
       stage: props.stage,
       bucket: storage.bucket,
@@ -70,6 +77,7 @@ export class InfraStack extends Stack {
       memorySize: props.processorMemory,
       logRetention: RetentionDays.ONE_WEEK,
     });
+    Tags.of(processor).add('Component', 'processor');
     const jobInputSuffixes = [JOB_INPUT_SUFFIX, THREE_MF_JOB_INPUT_SUFFIX];
     for (const suffix of jobInputSuffixes) {
       storage.bucket.addEventNotification(
@@ -86,6 +94,7 @@ export class InfraStack extends Stack {
       createJobRateLimit: props.createJobRateLimit,
       rateLimitSecret: rateLimitSecret.valueAsString,
     });
+    Tags.of(api).add('Component', 'api');
     const frontend = new FrontendHosting(this, 'Frontend', {
       stage: props.stage,
       artifactPath: props.frontendArtifactPath,
@@ -93,6 +102,21 @@ export class InfraStack extends Stack {
       customDomain: props.customDomain,
       googleSiteVerification: props.googleSiteVerification,
       webAclArn: cloudFrontWebAcl?.arn,
+    });
+    Tags.of(frontend).add('Component', 'frontend');
+    if (cloudFrontWebAcl) {
+      Tags.of(cloudFrontWebAcl).add('Component', 'infra');
+    }
+    new CfnGroup(this, 'InspectMeshResourceGroup', {
+      name: `inspectmesh-${props.stage}-resources`,
+      description: 'All InspectMesh resources discovered from Project InspectMesh tags.',
+      resourceQuery: {
+        type: 'TAG_FILTERS_1_0',
+        query: {
+          resourceTypeFilters: ['AWS::AllSupported'],
+          tagFilters: [{ key: 'Project', values: ['InspectMesh'] }],
+        },
+      },
     });
     const alarmTopic = props.operationsAlertEmail
       ? new Topic(this, 'OperationsAlarmTopic', {
@@ -225,9 +249,6 @@ export class InfraStack extends Stack {
         ],
       ],
     });
-    Tags.of(this).add('Project', '3d-quality');
-    Tags.of(this).add('Environment', props.stage);
-    Tags.of(this).add('ManagedBy', 'CDK');
     if (props.budgetAlertEmail) {
       new CfnBudget(this, 'MonthlyCostBudget', {
         budget: {
@@ -235,7 +256,7 @@ export class InfraStack extends Stack {
           budgetType: 'COST',
           timeUnit: 'MONTHLY',
           budgetLimit: { amount: props.monthlyBudgetUsd ?? 10, unit: 'USD' },
-          costFilters: { TagKeyValue: [`user:Project$3d-quality`] },
+          costFilters: { TagKeyValue: [`user:Project$InspectMesh`] },
         },
         notificationsWithSubscribers: [
           {

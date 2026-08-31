@@ -43,6 +43,38 @@ void test('takes the rate-limit signing secret from a NoEcho deployment paramete
   result.resourceCountIs('AWS::SecretsManager::Secret', 0);
 });
 
+void test('tags InspectMesh resources and groups them by project tag', () => {
+  const result = template();
+  const apiTags = [
+    { Key: 'Component', Value: 'api' },
+    { Key: 'Environment', Value: 'dev' },
+    { Key: 'ManagedBy', Value: 'CDK' },
+    { Key: 'Project', Value: 'InspectMesh' },
+  ];
+  result.hasResourceProperties('AWS::Lambda::Function', {
+    FunctionName: '3d-api-dev',
+    Tags: apiTags,
+  });
+  result.hasResourceProperties('AWS::CloudFront::Distribution', {
+    Tags: [
+      { Key: 'Component', Value: 'frontend' },
+      { Key: 'Environment', Value: 'dev' },
+      { Key: 'ManagedBy', Value: 'CDK' },
+      { Key: 'Project', Value: 'InspectMesh' },
+    ],
+  });
+  result.hasResourceProperties('AWS::ResourceGroups::Group', {
+    Name: 'inspectmesh-dev-resources',
+    ResourceQuery: {
+      Type: 'TAG_FILTERS_1_0',
+      Query: {
+        ResourceTypeFilters: ['AWS::AllSupported'],
+        TagFilters: [{ Key: 'Project', Values: ['InspectMesh'] }],
+      },
+    },
+  });
+});
+
 void test('does not attach a Web ACL to the pay-as-you-go development distribution', () => {
   template().hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: {

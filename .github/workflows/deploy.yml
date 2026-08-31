@@ -29,7 +29,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-${{ inputs.environment || 'dev' }}
+  group: infrastructure-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 jobs:
@@ -107,7 +107,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24.19.0
           cache: npm
           cache-dependency-path: |
             3d-infra/package-lock.json
