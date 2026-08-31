@@ -1,0 +1,108 @@
+name: deploy-infra
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment and AWS stage to deploy
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy infrastructure to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      AWS_REGION: us-east-1
+      STAGE: ${{ inputs.environment }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      BUDGET_ALERT_EMAIL: ${{ vars.BUDGET_ALERT_EMAIL }}
+      OPERATIONS_ALERT_EMAIL: ${{ vars.OPERATIONS_ALERT_EMAIL }}
+      MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
+      CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
+      GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify AWS deployment configuration
+        run: |
+          if [ -z "$AWS_DEPLOY_ROLE_ARN" ]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not available in the selected GitHub Environment."
+            exit 1
+          fi
+          if ! printf '%s' "$AWS_DEPLOY_ROLE_ARN" | grep -Eq '^arn:aws:iam::[0-9]{12}:role/.+'; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not a valid IAM role ARN."
+            exit 1
+          fi
+          if ! printf '%s' "$AWS_ACCOUNT_ID" | grep -Eq '^[0-9]{12}$'; then
+            echo "::error::AWS_ACCOUNT_ID must be the 12-digit target AWS account ID."
+            exit 1
+          fi
+          if [ "$STAGE" = "prod" ] && [ -z "$GOOGLE_SITE_VERIFICATION" ]; then
+            echo "::error::GOOGLE_SITE_VERIFICATION is not available in the prod GitHub Environment."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run precommit
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+          retry-max-attempts: 3
+
+      - name: Restore deployed application artifacts
+        run: |
+          STACK_NAME="three-d-infra-$STAGE"
+          FRONTEND_BUCKET="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)"
+          if [ -z "$FRONTEND_BUCKET" ]; then
+            echo "::error::The $STACK_NAME stack must already exist. Use deploy-all for the initial coordinated deployment."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/application-artifacts"
+          curl --fail --location --retry 3 "$(aws lambda get-function --function-name "3d-api-$STAGE" --query 'Code.Location' --output text)" --output "$RUNNER_TEMP/application-artifacts/3d-api.zip"
+          curl --fail --location --retry 3 "$(aws lambda get-function --function-name "3d-processor-$STAGE" --query 'Code.Location' --output text)" --output "$RUNNER_TEMP/application-artifacts/3d-processor.zip"
+          aws s3 sync "s3://$FRONTEND_BUCKET" "$RUNNER_TEMP/application-artifacts/frontend"
+
+      - name: Show CloudFormation changes
+        run: |
+          PROCESSOR_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-processor.zip" \
+          API_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-api.zip" \
+          FRONTEND_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/frontend" \
+          npx cdk diff -c stage="$STAGE"
+
+      - name: Deploy infrastructure configuration
+        env:
+          RATE_LIMIT_SECRET: ${{ secrets.RATE_LIMIT_SECRET }}
+        run: |
+          if [ -z "$RATE_LIMIT_SECRET" ]; then
+            echo "::error::RATE_LIMIT_SECRET is not configured in the selected GitHub Environment."
+            exit 1
+          fi
+          PROCESSOR_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-processor.zip" \
+          API_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-api.zip" \
+          FRONTEND_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/frontend" \
+          npx cdk deploy -c stage="$STAGE" --require-approval never \
+          --parameters RateLimitSecret="$RATE_LIMIT_SECRET" --outputs-file cdk-outputs.json
