@@ -12,10 +12,14 @@ import {
   CLEANED_STL_SUFFIX,
   CLEANED_THREE_MF_SUFFIX,
   JOB_INPUT_SUFFIX,
+  JOB_METADATA_SUFFIX,
   JOB_REPORT_SUFFIX,
   JOBS_PREFIX,
   OUTPUT_FOLDER,
   STL_REPAIR_INPUT_SUFFIX,
+  STL_SPLIT_INPUT_SUFFIX,
+  STL_SPLIT_PART_A_SUFFIX,
+  STL_SPLIT_PART_B_SUFFIX,
   THREE_MF_REPAIR_INPUT_SUFFIX,
   THREE_MF_JOB_INPUT_SUFFIX,
 } from './storage';
@@ -68,9 +72,13 @@ export class ProcessorLambda extends Construct {
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${THREE_MF_JOB_INPUT_SUFFIX}`);
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${STL_REPAIR_INPUT_SUFFIX}`);
+    props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${STL_SPLIT_INPUT_SUFFIX}`);
+    props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${THREE_MF_REPAIR_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_REPORT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${CLEANED_STL_SUFFIX}`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${STL_SPLIT_PART_A_SUFFIX}`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${STL_SPLIT_PART_B_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${CLEANED_THREE_MF_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*/${OUTPUT_FOLDER}/failure.json`);
     this.function.addEventSource(

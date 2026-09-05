@@ -343,6 +343,18 @@ void test('routes only job input object-created events to SQS', () => {
           Filter: {
             Key: {
               FilterRules: [
+                { Name: 'suffix', Value: '/input/split.stl' },
+                { Name: 'prefix', Value: 'jobs/' },
+              ],
+            },
+          },
+          QueueArn: Match.anyValue(),
+        }),
+        Match.objectLike({
+          Events: ['s3:ObjectCreated:*'],
+          Filter: {
+            Key: {
+              FilterRules: [
                 { Name: 'suffix', Value: '/input/repair.3mf' },
                 { Name: 'prefix', Value: 'jobs/' },
               ],

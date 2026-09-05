@@ -21,6 +21,7 @@ import {
   JOB_INPUT_SUFFIX,
   JOBS_PREFIX,
   STL_REPAIR_INPUT_SUFFIX,
+  STL_SPLIT_INPUT_SUFFIX,
   Storage,
   THREE_MF_REPAIR_INPUT_SUFFIX,
   THREE_MF_JOB_INPUT_SUFFIX,
@@ -84,6 +85,7 @@ export class InfraStack extends Stack {
       JOB_INPUT_SUFFIX,
       THREE_MF_JOB_INPUT_SUFFIX,
       STL_REPAIR_INPUT_SUFFIX,
+      STL_SPLIT_INPUT_SUFFIX,
       THREE_MF_REPAIR_INPUT_SUFFIX,
     ];
     for (const suffix of jobInputSuffixes) {

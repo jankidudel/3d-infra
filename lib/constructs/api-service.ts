@@ -14,6 +14,7 @@ import {
   JOB_METADATA_SUFFIX,
   JOBS_PREFIX,
   STL_REPAIR_INPUT_SUFFIX,
+  STL_SPLIT_INPUT_SUFFIX,
   THREE_MF_REPAIR_INPUT_SUFFIX,
   THREE_MF_JOB_INPUT_SUFFIX,
 } from './storage';
@@ -86,6 +87,7 @@ export class ApiService extends Construct {
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${THREE_MF_JOB_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${STL_REPAIR_INPUT_SUFFIX}`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${STL_SPLIT_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${THREE_MF_REPAIR_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
     this.function.addToRolePolicy(
