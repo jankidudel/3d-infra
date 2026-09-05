@@ -307,7 +307,7 @@ void test('routes only job input object-created events to SQS', () => {
           Filter: {
             Key: {
               FilterRules: [
-                { Name: 'suffix', Value: '/input.stl' },
+                { Name: 'suffix', Value: '/input/input.stl' },
                 { Name: 'prefix', Value: 'jobs/' },
               ],
             },
@@ -319,7 +319,31 @@ void test('routes only job input object-created events to SQS', () => {
           Filter: {
             Key: {
               FilterRules: [
-                { Name: 'suffix', Value: '/input.3mf' },
+                { Name: 'suffix', Value: '/input/input.3mf' },
+                { Name: 'prefix', Value: 'jobs/' },
+              ],
+            },
+          },
+          QueueArn: Match.anyValue(),
+        }),
+        Match.objectLike({
+          Events: ['s3:ObjectCreated:*'],
+          Filter: {
+            Key: {
+              FilterRules: [
+                { Name: 'suffix', Value: '/input/repair.stl' },
+                { Name: 'prefix', Value: 'jobs/' },
+              ],
+            },
+          },
+          QueueArn: Match.anyValue(),
+        }),
+        Match.objectLike({
+          Events: ['s3:ObjectCreated:*'],
+          Filter: {
+            Key: {
+              FilterRules: [
+                { Name: 'suffix', Value: '/input/repair.3mf' },
                 { Name: 'prefix', Value: 'jobs/' },
               ],
             },

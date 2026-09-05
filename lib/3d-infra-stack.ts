@@ -20,7 +20,9 @@ import { ProcessorLambda } from './constructs/processor-lambda';
 import {
   JOB_INPUT_SUFFIX,
   JOBS_PREFIX,
+  STL_REPAIR_INPUT_SUFFIX,
   Storage,
+  THREE_MF_REPAIR_INPUT_SUFFIX,
   THREE_MF_JOB_INPUT_SUFFIX,
 } from './constructs/storage';
 import { ApiService } from './constructs/api-service';
@@ -78,7 +80,12 @@ export class InfraStack extends Stack {
       logRetention: RetentionDays.ONE_WEEK,
     });
     Tags.of(processor).add('Component', 'processor');
-    const jobInputSuffixes = [JOB_INPUT_SUFFIX, THREE_MF_JOB_INPUT_SUFFIX];
+    const jobInputSuffixes = [
+      JOB_INPUT_SUFFIX,
+      THREE_MF_JOB_INPUT_SUFFIX,
+      STL_REPAIR_INPUT_SUFFIX,
+      THREE_MF_REPAIR_INPUT_SUFFIX,
+    ];
     for (const suffix of jobInputSuffixes) {
       storage.bucket.addEventNotification(
         EventType.OBJECT_CREATED,

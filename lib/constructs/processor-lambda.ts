@@ -9,9 +9,14 @@ import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { PROCESSOR_TIMEOUT_SECONDS } from './processing-queue';
 import {
+  CLEANED_STL_SUFFIX,
+  CLEANED_THREE_MF_SUFFIX,
   JOB_INPUT_SUFFIX,
   JOB_REPORT_SUFFIX,
   JOBS_PREFIX,
+  OUTPUT_FOLDER,
+  STL_REPAIR_INPUT_SUFFIX,
+  THREE_MF_REPAIR_INPUT_SUFFIX,
   THREE_MF_JOB_INPUT_SUFFIX,
 } from './storage';
 
@@ -62,8 +67,12 @@ export class ProcessorLambda extends Construct {
     });
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${JOB_INPUT_SUFFIX}`);
     props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${THREE_MF_JOB_INPUT_SUFFIX}`);
+    props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${STL_REPAIR_INPUT_SUFFIX}`);
+    props.bucket.grantRead(this.function, `${JOBS_PREFIX}*${THREE_MF_REPAIR_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_REPORT_SUFFIX}`);
-    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*/failure.json`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${CLEANED_STL_SUFFIX}`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${CLEANED_THREE_MF_SUFFIX}`);
+    props.bucket.grantPut(this.function, `${JOBS_PREFIX}*/${OUTPUT_FOLDER}/failure.json`);
     this.function.addEventSource(
       new SqsEventSource(props.queue, {
         batchSize: 1,

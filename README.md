@@ -5,11 +5,11 @@ AWS CDK v2 infrastructure for the 3d-quality processing pipeline. This repositor
 ## Architecture
 
 ```text
-Angular → Go API → presigned POST → S3 jobs/{jobId}/input.stl
+Angular → Go API → presigned POST → S3 jobs/{jobId}/input/input.stl
                                                 ↓ object-created event
                                                SQS → .NET 10 Lambda
                                                 ↓             ↓
-                                               DLQ   jobs/{jobId}/report.json
+                                               DLQ   jobs/{jobId}/output/report.json
 ```
 
 The private S3 bucket uses S3-managed encryption, blocks public access, and expires complete job subtrees after one day. The standard queue has a 720-second visibility timeout and a DLQ. The processor runs with 256 MB, a 120-second timeout, x86_64 architecture, batch size 1, and a fixed SQS event-source maximum concurrency of 2. Reserved concurrency is intentionally not configured because small account concurrency quotas may not leave AWS's required unreserved concurrency capacity.
