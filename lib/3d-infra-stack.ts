@@ -9,23 +9,13 @@ import {
 } from 'aws-cdk-lib/aws-cloudwatch';
 import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
-import { EventType } from 'aws-cdk-lib/aws-s3';
-import { SqsDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { CfnGroup } from 'aws-cdk-lib/aws-resourcegroups';
 import { Construct } from 'constructs';
 import { ProcessingQueue, PROCESSOR_TIMEOUT_SECONDS } from './constructs/processing-queue';
 import { ProcessorLambda } from './constructs/processor-lambda';
-import {
-  JOB_INPUT_SUFFIX,
-  JOBS_PREFIX,
-  STL_REPAIR_INPUT_SUFFIX,
-  STL_SPLIT_INPUT_SUFFIX,
-  Storage,
-  THREE_MF_REPAIR_INPUT_SUFFIX,
-  THREE_MF_JOB_INPUT_SUFFIX,
-} from './constructs/storage';
+import { Storage } from './constructs/storage';
 import { ApiService } from './constructs/api-service';
 import { CloudFrontWebAcl } from './constructs/cloudfront-web-acl';
 import { FrontendHosting } from './constructs/frontend-hosting';
@@ -81,23 +71,10 @@ export class InfraStack extends Stack {
       logRetention: RetentionDays.ONE_WEEK,
     });
     Tags.of(processor).add('Component', 'processor');
-    const jobInputSuffixes = [
-      JOB_INPUT_SUFFIX,
-      THREE_MF_JOB_INPUT_SUFFIX,
-      STL_REPAIR_INPUT_SUFFIX,
-      STL_SPLIT_INPUT_SUFFIX,
-      THREE_MF_REPAIR_INPUT_SUFFIX,
-    ];
-    for (const suffix of jobInputSuffixes) {
-      storage.bucket.addEventNotification(
-        EventType.OBJECT_CREATED,
-        new SqsDestination(processing.queue),
-        { prefix: JOBS_PREFIX, suffix },
-      );
-    }
     const api = new ApiService(this, 'Api', {
       stage: props.stage,
       bucket: storage.bucket,
+      queue: processing.queue,
       artifactPath: props.apiArtifactPath,
       createJobBurstLimit: props.createJobBurstLimit,
       createJobRateLimit: props.createJobRateLimit,

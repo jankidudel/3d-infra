@@ -7,6 +7,7 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Metric, Stats } from 'aws-cdk-lib/aws-cloudwatch';
 import { FilterPattern, LogGroup, MetricFilter, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
+import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import {
@@ -25,6 +26,7 @@ const CREATE_JOB_PATH = '/api/v1/jobs';
 export interface ApiServiceProps {
   readonly stage: string;
   readonly bucket: Bucket;
+  readonly queue: Queue;
   readonly artifactPath: string;
   readonly createJobBurstLimit?: number;
   readonly createJobRateLimit?: number;
@@ -67,6 +69,7 @@ export class ApiService extends Construct {
         ENABLE_API_DOCUMENTATION: isDev ? 'true' : 'false',
         RATE_LIMIT_TABLE: this.rateLimitTable.tableName,
         RATE_LIMIT_SECRET: props.rateLimitSecret,
+        PROCESSING_QUEUE_URL: props.queue.queueUrl,
       },
       logGroup,
       // Re-enable Lambda Insights only after reviewing its custom-metric cost.
@@ -90,6 +93,7 @@ export class ApiService extends Construct {
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${STL_SPLIT_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${THREE_MF_REPAIR_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
+    props.queue.grantSendMessages(this.function);
     this.function.addToRolePolicy(
       new PolicyStatement({
         actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],

@@ -298,73 +298,8 @@ void test('creates an email-notified monthly budget when configured', () => {
   });
 });
 
-void test('routes only job input object-created events to SQS', () => {
-  template().hasResourceProperties('Custom::S3BucketNotifications', {
-    NotificationConfiguration: {
-      QueueConfigurations: Match.arrayWith([
-        Match.objectLike({
-          Events: ['s3:ObjectCreated:*'],
-          Filter: {
-            Key: {
-              FilterRules: [
-                { Name: 'suffix', Value: '/input/input.stl' },
-                { Name: 'prefix', Value: 'jobs/' },
-              ],
-            },
-          },
-          QueueArn: Match.anyValue(),
-        }),
-        Match.objectLike({
-          Events: ['s3:ObjectCreated:*'],
-          Filter: {
-            Key: {
-              FilterRules: [
-                { Name: 'suffix', Value: '/input/input.3mf' },
-                { Name: 'prefix', Value: 'jobs/' },
-              ],
-            },
-          },
-          QueueArn: Match.anyValue(),
-        }),
-        Match.objectLike({
-          Events: ['s3:ObjectCreated:*'],
-          Filter: {
-            Key: {
-              FilterRules: [
-                { Name: 'suffix', Value: '/input/repair.stl' },
-                { Name: 'prefix', Value: 'jobs/' },
-              ],
-            },
-          },
-          QueueArn: Match.anyValue(),
-        }),
-        Match.objectLike({
-          Events: ['s3:ObjectCreated:*'],
-          Filter: {
-            Key: {
-              FilterRules: [
-                { Name: 'suffix', Value: '/input/split.stl' },
-                { Name: 'prefix', Value: 'jobs/' },
-              ],
-            },
-          },
-          QueueArn: Match.anyValue(),
-        }),
-        Match.objectLike({
-          Events: ['s3:ObjectCreated:*'],
-          Filter: {
-            Key: {
-              FilterRules: [
-                { Name: 'suffix', Value: '/input/repair.3mf' },
-                { Name: 'prefix', Value: 'jobs/' },
-              ],
-            },
-          },
-          QueueArn: Match.anyValue(),
-        }),
-      ]),
-    },
-  });
+void test('uses API dispatch rather than S3 notifications for accepted uploads', () => {
+  template().resourceCountIs('Custom::S3BucketNotifications', 0);
 });
 
 void test('creates API failure monitoring alarms and optional email notifications', () => {
