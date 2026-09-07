@@ -103,7 +103,12 @@ export class FrontendHosting extends Construct {
       defaultBehavior: {
         origin: frontendOrigin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: CachePolicy.CACHING_DISABLED,
+        // The frontend is static, prerendered output. Edge caching route HTML
+        // avoids an S3 round trip for every visit; deployment invalidation
+        // clears it whenever a new frontend is published. The viewer-request
+        // function still runs before the cache lookup, so dev Basic Auth is
+        // enforced for cached responses too.
+        cachePolicy: CachePolicy.CACHING_OPTIMIZED,
         responseHeadersPolicy,
         functionAssociations: [
           { eventType: FunctionEventType.VIEWER_REQUEST, function: spaRewrite },

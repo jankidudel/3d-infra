@@ -458,13 +458,13 @@ void test('allows the API throttle defaults to be overridden', () => {
   });
 });
 
-void test('creates private static hosting behind CloudFront with API routing', () => {
+void test('caches static hosting at CloudFront while leaving API routing uncached', () => {
   const result = template();
   result.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: Match.objectLike({
       DefaultRootObject: 'index.html',
       DefaultCacheBehavior: Match.objectLike({
-        CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+        CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
         FunctionAssociations: [
           Match.objectLike({ EventType: 'viewer-request', FunctionARN: Match.anyValue() }),
         ],
