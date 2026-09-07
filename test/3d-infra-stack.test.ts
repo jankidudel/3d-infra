@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
@@ -41,6 +42,25 @@ void test('takes the rate-limit signing secret from a NoEcho deployment paramete
   const result = template();
   result.hasParameter('RateLimitSecret', { NoEcho: true, MinLength: 32 });
   result.resourceCountIs('AWS::SecretsManager::Secret', 0);
+});
+
+void test('protects only the development CloudFront distribution with a no-echo Basic Auth parameter', () => {
+  const development = template();
+  development.hasParameter('DevBasicAuthAuthorization', {
+    NoEcho: true,
+    MinLength: 12,
+  });
+  development.hasResourceProperties('AWS::CloudFront::Function', {
+    FunctionCode: Match.anyValue(),
+  });
+  assert.match(
+    JSON.stringify(Object.values(development.findResources('AWS::CloudFront::Function'))),
+    /expectedAuthorization/,
+  );
+  assert.doesNotMatch(
+    JSON.stringify(template(stages.production).toJSON()),
+    /DevBasicAuthAuthorization/,
+  );
 });
 
 void test('tags InspectMesh resources and groups them by project tag', () => {
@@ -457,7 +477,7 @@ void test('creates private static hosting behind CloudFront with API routing', (
     }),
   });
   result.hasResourceProperties('AWS::CloudFront::Function', {
-    FunctionCode: Match.stringLikeRegexp("request.uri = uri \\+ '/index.html'"),
+    FunctionCode: Match.anyValue(),
   });
   result.resourceCountIs('AWS::CloudFront::CachePolicy', 0);
   result.hasOutput('FrontendDistributionId', {});

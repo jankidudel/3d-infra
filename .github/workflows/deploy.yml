@@ -187,17 +187,26 @@ jobs:
       - name: Deploy with CDK
         env:
           RATE_LIMIT_SECRET: ${{ secrets.RATE_LIMIT_SECRET }}
+          DEV_BASIC_AUTHORIZATION: ${{ secrets.DEV_BASIC_AUTHORIZATION }}
         working-directory: 3d-infra
         run: |
           if [ -z "$RATE_LIMIT_SECRET" ]; then
             echo "::error::RATE_LIMIT_SECRET is not configured in the selected GitHub Environment."
             exit 1
           fi
+          if [ "$STAGE" = "dev" ] && [ -z "$DEV_BASIC_AUTHORIZATION" ]; then
+            echo "::error::DEV_BASIC_AUTHORIZATION is not configured in the dev GitHub Environment."
+            exit 1
+          fi
+          PARAMETERS=(--parameters "RateLimitSecret=$RATE_LIMIT_SECRET")
+          if [ "$STAGE" = "dev" ]; then
+            PARAMETERS+=("DevBasicAuthAuthorization=$DEV_BASIC_AUTHORIZATION")
+          fi
           PROCESSOR_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-processor/artifacts/3d-processor.zip" \
           API_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-api/artifacts/3d-api.zip" \
           FRONTEND_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-frontend/dist/3d-frontend/browser" \
           npx cdk deploy -c stage="$STAGE" --require-approval never \
-          --parameters RateLimitSecret="$RATE_LIMIT_SECRET" --outputs-file cdk-outputs.json
+          "${PARAMETERS[@]}" --outputs-file cdk-outputs.json
 
       - name: Report production DNS and deployment details
         if: ${{ inputs.environment == 'prod' }}

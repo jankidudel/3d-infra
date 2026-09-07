@@ -26,7 +26,7 @@ import { Construct } from 'constructs';
 import { ApiService } from './api-service';
 import { productionDomain } from '../production-domain';
 import { stages } from '../stages';
-import { spaRewriteFunctionCode } from './spa-rewrite-function';
+import { basicAuthSpaRewriteFunctionCode, spaRewriteFunctionCode } from './spa-rewrite-function';
 
 export interface FrontendHostingProps {
   readonly stage: string;
@@ -35,6 +35,8 @@ export interface FrontendHostingProps {
   readonly customDomain?: typeof productionDomain;
   readonly googleSiteVerification?: string;
   readonly webAclArn?: string;
+  /** Complete Basic Authorization header used only by the development distribution. */
+  readonly basicAuthAuthorization?: string;
 }
 
 export class FrontendHosting extends Construct {
@@ -69,8 +71,11 @@ export class FrontendHosting extends Construct {
 
     // Resolve clean URLs to Angular's prerendered HTML. Production also redirects
     // the apex hostname before rewriting, using the raw query string verbatim.
+    const viewerRequestFunctionCode = props.basicAuthAuthorization
+      ? basicAuthSpaRewriteFunctionCode(props.basicAuthAuthorization, props.customDomain)
+      : spaRewriteFunctionCode(props.customDomain);
     const spaRewrite = new CfFunction(this, 'SpaRewriteFunction', {
-      code: FunctionCode.fromInline(spaRewriteFunctionCode(props.customDomain)),
+      code: FunctionCode.fromInline(viewerRequestFunctionCode),
       runtime: props.customDomain ? FunctionRuntime.JS_2_0 : FunctionRuntime.JS_1_0,
     });
     const apexRedirectAssociation = props.customDomain

@@ -60,6 +60,16 @@ export class InfraStack extends Stack {
       minLength: 32,
       description: 'Random rate-limit signing secret supplied by the protected GitHub Environment.',
     });
+    const devBasicAuthAuthorization =
+      props.stage === stages.development
+        ? new CfnParameter(this, 'DevBasicAuthAuthorization', {
+            type: 'String',
+            noEcho: true,
+            minLength: 12,
+            description:
+              'Complete HTTP Basic Authorization header protecting the development CloudFront distribution.',
+          })
+        : undefined;
     const processing = new ProcessingQueue(this, 'Processing', { stage: props.stage });
     Tags.of(processing).add('Component', 'infra');
     const processor = new ProcessorLambda(this, 'Processor', {
@@ -88,6 +98,7 @@ export class InfraStack extends Stack {
       customDomain: props.customDomain,
       googleSiteVerification: props.googleSiteVerification,
       webAclArn: cloudFrontWebAcl?.arn,
+      basicAuthAuthorization: devBasicAuthAuthorization?.valueAsString,
     });
     Tags.of(frontend).add('Component', 'frontend');
     if (cloudFrontWebAcl) {

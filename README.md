@@ -268,3 +268,23 @@ dependency and allow that stack to modify its own deployment identity.
 
 `npm install` configures Git to use the tracked `.githooks` directory. Every commit then
 runs the same `npm run precommit` checks automatically.
+
+# Development CloudFront access
+
+The `dev` CloudFront distribution requires HTTP Basic Authentication for every
+viewer request, including `/api/*`. Add `DEV_BASIC_AUTHORIZATION` as a secret
+to the `dev` GitHub Environment only. Its value must be the full HTTP
+authorization header, for example `Basic dXNlcjpwYXNzd29yZA==`, where the
+encoded portion is base64 of `username:password` with no trailing newline.
+
+Generate it locally without printing the password in shell history:
+
+```sh
+read -r -p 'Username: ' username
+read -r -s -p 'Password: ' password
+printf 'Basic %s' "$(printf '%s:%s' "$username" "$password" | base64)"
+```
+
+Do not add this secret to `prod`. Basic Authentication is a practical private
+development gate, not an application identity system. It protects CloudFront;
+the direct API Gateway hostname remains a separate API endpoint.

@@ -1,12 +1,18 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
-import { spaRewriteFunctionCode } from '../lib/constructs/spa-rewrite-function';
+import {
+  basicAuthSpaRewriteFunctionCode,
+  spaRewriteFunctionCode,
+} from '../lib/constructs/spa-rewrite-function';
 import { productionDomain } from '../lib/production-domain';
 
 interface CloudFrontRequest {
   readonly uri: string;
-  readonly headers: { readonly host: { readonly value: string } };
+  readonly headers: {
+    readonly host: { readonly value: string };
+    readonly authorization?: { readonly value: string };
+  };
   readonly querystring: Record<string, unknown>;
   readonly rawQueryString: () => string | undefined;
 }
@@ -21,10 +27,26 @@ function handler(): CloudFrontHandler {
   return candidate as CloudFrontHandler;
 }
 
-function request(host: string, uri: string, rawQueryString?: string): CloudFrontRequest {
+function authenticatedHandler(): CloudFrontHandler {
+  const candidate: unknown = runInNewContext(
+    `${basicAuthSpaRewriteFunctionCode('Basic dGVzdDpwYXNz')}; handler;`,
+  );
+  assert.equal(typeof candidate, 'function');
+  return candidate as CloudFrontHandler;
+}
+
+function request(
+  host: string,
+  uri: string,
+  rawQueryString?: string,
+  authorization?: string,
+): CloudFrontRequest {
   return {
     uri,
-    headers: { host: { value: host } },
+    headers: {
+      host: { value: host },
+      ...(authorization ? { authorization: { value: authorization } } : {}),
+    },
     querystring: rawQueryString === undefined ? {} : { present: { value: rawQueryString } },
     rawQueryString: () => rawQueryString,
   };
@@ -93,4 +115,20 @@ void test('redirect target reaches the canonical hostname without a redirect loo
   const canonicalRequest = request(target.host, target.pathname, target.search.slice(1));
 
   assert.equal(handler()({ request: canonicalRequest }), canonicalRequest);
+});
+
+void test('challenges unauthenticated dev requests before applying the SPA rewrite', () => {
+  const unauthenticated = request('dev.example.com', '/stl-tools');
+  const response = authenticatedHandler()({ request: unauthenticated }) as {
+    readonly statusCode: number;
+    readonly headers: { readonly 'www-authenticate': { readonly value: string } };
+  };
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.headers['www-authenticate'].value, 'Basic realm="InspectMesh development"');
+});
+
+void test('rewrites authenticated dev requests after their credentials are accepted', () => {
+  const authenticated = request('dev.example.com', '/stl-tools', undefined, 'Basic dGVzdDpwYXNz');
+  const result = authenticatedHandler()({ request: authenticated }) as CloudFrontRequest;
+  assert.equal(result.uri, '/stl-tools/index.html');
 });
