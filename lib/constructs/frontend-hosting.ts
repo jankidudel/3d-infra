@@ -167,7 +167,10 @@ export class FrontendHosting extends Construct {
       sources: [Source.asset(props.artifactPath)],
       distribution: this.distribution,
       distributionPaths: ['/*'],
-      prune: true,
+      // Retain prior content-hashed chunks so an already-open browser tab can
+      // finish a lazy route transition after a deployment. Current route HTML
+      // is overwritten and invalidated by this deployment.
+      prune: false,
     });
   }
 }
