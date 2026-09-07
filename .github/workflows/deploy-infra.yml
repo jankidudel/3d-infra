@@ -110,7 +110,7 @@ jobs:
           fi
           PARAMETERS=(--parameters "RateLimitSecret=$RATE_LIMIT_SECRET")
           if [ "$STAGE" = "dev" ]; then
-            PARAMETERS+=("DevBasicAuthAuthorization=$DEV_BASIC_AUTHORIZATION")
+            PARAMETERS+=(--parameters "DevBasicAuthAuthorization=$DEV_BASIC_AUTHORIZATION")
           fi
           PROCESSOR_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-processor.zip" \
           API_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-api.zip" \
