@@ -137,18 +137,20 @@ The stack outputs storage and queue identifiers, Lambda names, the API URL, and
 the CloudFront frontend URL and distribution ID.
 
 CloudFront serves Angular's prerendered HTML for clean routes such as
-`/stl-quality-check` without caching HTML responses. Hashed JavaScript and CSS
-assets use CloudFront's managed optimized cache policy (24-hour default TTL and
-one-year maximum), while `/api/*` is forwarded to API Gateway with caching disabled.
-No custom cache policy is created. The development distribution uses CloudFront
-pay-as-you-go pricing; its `/api/*` behavior remains a CloudFront-to-API-Gateway
-proxy. Each frontend deployment invalidates `/*` automatically. To clear the
-distribution manually, use the `FrontendDistributionId` stack output:
+`/stl-quality-check` with caching disabled at the edge. The deployment workflow
+uploads fingerprinted JavaScript, CSS and font assets with a one-year immutable
+browser cache policy, while HTML and stable public files revalidate on every
+refresh. `/api/*` is forwarded to API Gateway with caching disabled. The
+development distribution uses CloudFront pay-as-you-go pricing; its `/api/*`
+behavior remains a CloudFront-to-API-Gateway proxy. Frontend deployments
+invalidate only mutable document paths; they never invalidate or delete hashed
+chunks. To clear a document manually, use the `FrontendDistributionId` stack
+output:
 
 ```sh
 aws cloudfront create-invalidation \
   --distribution-id DISTRIBUTION_ID \
-  --paths '/*'
+  --paths '/' '/index.html' '/*/index.html'
 ```
 
 Production defines a CloudFront-scope WAF Web ACL named `3d-prod-cloudfront`. Its

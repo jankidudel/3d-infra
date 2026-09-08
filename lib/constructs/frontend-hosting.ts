@@ -103,12 +103,12 @@ export class FrontendHosting extends Construct {
       defaultBehavior: {
         origin: frontendOrigin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        // The frontend is static, prerendered output. Edge caching route HTML
-        // avoids an S3 round trip for every visit; deployment invalidation
-        // clears it whenever a new frontend is published. The viewer-request
-        // function still runs before the cache lookup, so dev Basic Auth is
-        // enforced for cached responses too.
-        cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+        // HTML and stable public files carry a revalidation policy at S3. Do
+        // not let CloudFront impose a positive minimum TTL on route documents:
+        // a refresh must obtain the current document and its matching chunks.
+        // The viewer-request function still runs before origin access, so dev
+        // Basic Auth is enforced for every document response.
+        cachePolicy: CachePolicy.CACHING_DISABLED,
         responseHeadersPolicy,
         functionAssociations: [
           { eventType: FunctionEventType.VIEWER_REQUEST, function: spaRewrite },
@@ -123,6 +123,34 @@ export class FrontendHosting extends Construct {
           functionAssociations: apexRedirectAssociation,
         },
         '*.css': {
+          origin: frontendOrigin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy,
+          functionAssociations: apexRedirectAssociation,
+        },
+        '*.woff': {
+          origin: frontendOrigin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy,
+          functionAssociations: apexRedirectAssociation,
+        },
+        '*.woff2': {
+          origin: frontendOrigin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy,
+          functionAssociations: apexRedirectAssociation,
+        },
+        '*.ttf': {
+          origin: frontendOrigin,
+          viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy,
+          functionAssociations: apexRedirectAssociation,
+        },
+        '*.otf': {
           origin: frontendOrigin,
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: CachePolicy.CACHING_OPTIMIZED,
@@ -165,11 +193,9 @@ export class FrontendHosting extends Construct {
     new BucketDeployment(this, 'Deployment', {
       destinationBucket: this.bucket,
       sources: [Source.asset(props.artifactPath)],
-      distribution: this.distribution,
-      distributionPaths: ['/*'],
       // Retain prior content-hashed chunks so an already-open browser tab can
-      // finish a lazy route transition after a deployment. Current route HTML
-      // is overwritten and invalidated by this deployment.
+      // finish a lazy route transition after a deployment. Cache headers and
+      // document-only invalidation are applied by deploy-frontend.yml.
       prune: false,
     });
   }

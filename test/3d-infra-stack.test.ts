@@ -458,13 +458,13 @@ void test('allows the API throttle defaults to be overridden', () => {
   });
 });
 
-void test('caches static hosting at CloudFront while leaving API routing uncached', () => {
+void test('revalidates frontend documents while caching immutable assets', () => {
   const result = template();
   result.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: Match.objectLike({
       DefaultRootObject: 'index.html',
       DefaultCacheBehavior: Match.objectLike({
-        CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+        CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
         FunctionAssociations: [
           Match.objectLike({ EventType: 'viewer-request', FunctionARN: Match.anyValue() }),
         ],
@@ -472,6 +472,10 @@ void test('caches static hosting at CloudFront while leaving API routing uncache
       CacheBehaviors: Match.arrayWith([
         Match.objectLike({ PathPattern: '*.js', ViewerProtocolPolicy: 'redirect-to-https' }),
         Match.objectLike({ PathPattern: '*.css', ViewerProtocolPolicy: 'redirect-to-https' }),
+        Match.objectLike({ PathPattern: '*.woff', ViewerProtocolPolicy: 'redirect-to-https' }),
+        Match.objectLike({ PathPattern: '*.woff2', ViewerProtocolPolicy: 'redirect-to-https' }),
+        Match.objectLike({ PathPattern: '*.ttf', ViewerProtocolPolicy: 'redirect-to-https' }),
+        Match.objectLike({ PathPattern: '*.otf', ViewerProtocolPolicy: 'redirect-to-https' }),
         Match.objectLike({ PathPattern: 'api/*', ViewerProtocolPolicy: 'https-only' }),
       ]),
     }),
