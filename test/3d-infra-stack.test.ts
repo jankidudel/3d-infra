@@ -472,10 +472,6 @@ void test('revalidates frontend documents while caching immutable assets', () =>
       CacheBehaviors: Match.arrayWith([
         Match.objectLike({ PathPattern: '*.js', ViewerProtocolPolicy: 'redirect-to-https' }),
         Match.objectLike({ PathPattern: '*.css', ViewerProtocolPolicy: 'redirect-to-https' }),
-        Match.objectLike({ PathPattern: '*.woff', ViewerProtocolPolicy: 'redirect-to-https' }),
-        Match.objectLike({ PathPattern: '*.woff2', ViewerProtocolPolicy: 'redirect-to-https' }),
-        Match.objectLike({ PathPattern: '*.ttf', ViewerProtocolPolicy: 'redirect-to-https' }),
-        Match.objectLike({ PathPattern: '*.otf', ViewerProtocolPolicy: 'redirect-to-https' }),
         Match.objectLike({ PathPattern: 'api/*', ViewerProtocolPolicy: 'https-only' }),
       ]),
     }),

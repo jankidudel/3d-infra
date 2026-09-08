@@ -140,9 +140,10 @@ CloudFront serves Angular's prerendered HTML for clean routes such as
 `/stl-quality-check` with caching disabled at the edge. The deployment workflow
 uploads fingerprinted JavaScript, CSS and font assets with a one-year immutable
 browser cache policy, while HTML and stable public files revalidate on every
-refresh. `/api/*` is forwarded to API Gateway with caching disabled. The
-development distribution uses CloudFront pay-as-you-go pricing; its `/api/*`
-behavior remains a CloudFront-to-API-Gateway proxy. Frontend deployments
+refresh. CloudFront optimizes JavaScript and CSS cache delivery; `/api/*` is
+forwarded to API Gateway with caching disabled. The development distribution
+uses CloudFront pay-as-you-go pricing; its `/api/*` behavior remains a
+CloudFront-to-API-Gateway proxy. Frontend deployments
 invalidate only mutable document paths; they never invalidate or delete hashed
 chunks. To clear a document manually, use the `FrontendDistributionId` stack
 output:
