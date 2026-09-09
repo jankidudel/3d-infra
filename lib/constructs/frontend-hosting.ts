@@ -2,10 +2,7 @@ import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Certificate, CertificateValidation } from 'aws-cdk-lib/aws-certificatemanager';
 import {
   AllowedMethods,
-  CacheCookieBehavior,
-  CacheHeaderBehavior,
   CachePolicy,
-  CacheQueryStringBehavior,
   Distribution,
   ResponseHeadersPolicy,
   ViewerProtocolPolicy,
@@ -86,16 +83,6 @@ export class FrontendHosting extends Construct {
       : undefined;
 
     const frontendOrigin = S3BucketOrigin.withOriginAccessControl(this.bucket);
-    const staticAssetCachePolicy = new CachePolicy(this, 'StaticAssetCachePolicy', {
-      minTtl: Duration.seconds(0),
-      defaultTtl: Duration.days(1),
-      maxTtl: Duration.days(365),
-      cookieBehavior: CacheCookieBehavior.none(),
-      headerBehavior: CacheHeaderBehavior.none(),
-      queryStringBehavior: CacheQueryStringBehavior.none(),
-      enableAcceptEncodingBrotli: true,
-      enableAcceptEncodingGzip: true,
-    });
     // Use AWS's managed policy so the distribution needs no custom policy resource.
     const responseHeadersPolicy = ResponseHeadersPolicy.SECURITY_HEADERS;
     this.distribution = new Distribution(this, 'Distribution', {
@@ -131,14 +118,14 @@ export class FrontendHosting extends Construct {
         '*.js': {
           origin: frontendOrigin,
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: staticAssetCachePolicy,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
           responseHeadersPolicy,
           functionAssociations: apexRedirectAssociation,
         },
         '*.css': {
           origin: frontendOrigin,
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: staticAssetCachePolicy,
+          cachePolicy: CachePolicy.CACHING_OPTIMIZED,
           responseHeadersPolicy,
           functionAssociations: apexRedirectAssociation,
         },
@@ -179,8 +166,8 @@ export class FrontendHosting extends Construct {
       destinationBucket: this.bucket,
       sources: [Source.asset(props.artifactPath)],
       // Retain prior content-hashed chunks so an already-open browser tab can
-      // finish a lazy route transition after a deployment. Cache headers let
-      // mutable documents revalidate while content-addressed assets stay cached.
+      // finish a lazy route transition after a deployment. Content-addressed
+      // asset URLs make CloudFront invalidation unnecessary for normal deploys.
       prune: false,
     });
   }
