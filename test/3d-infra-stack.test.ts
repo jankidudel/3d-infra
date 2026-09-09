@@ -479,7 +479,14 @@ void test('revalidates frontend documents while caching immutable assets', () =>
   result.hasResourceProperties('AWS::CloudFront::Function', {
     FunctionCode: Match.anyValue(),
   });
-  result.resourceCountIs('AWS::CloudFront::CachePolicy', 0);
+  result.resourceCountIs('AWS::CloudFront::CachePolicy', 1);
+  result.hasResourceProperties('AWS::CloudFront::CachePolicy', {
+    CachePolicyConfig: Match.objectLike({
+      MinTTL: 0,
+      DefaultTTL: 86400,
+      MaxTTL: 31536000,
+    }),
+  });
   result.hasOutput('FrontendDistributionId', {});
   result.hasOutput('FrontendUrl', {});
 });
