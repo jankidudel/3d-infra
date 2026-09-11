@@ -198,7 +198,17 @@ void test('configures an isolated production custom domain with strict upload CO
     FunctionConfig: { Runtime: 'cloudfront-js-2.0' },
     FunctionCode: Match.stringLikeRegexp('request\\.rawQueryString\\(\\)'),
   });
-  result.resourceCountIs('AWS::Route53::RecordSet', 5);
+  result.resourceCountIs('AWS::Route53::RecordSet', 7);
+  result.hasResourceProperties('AWS::Route53::RecordSet', {
+    Type: 'MX',
+    TTL: '14400',
+    ResourceRecords: ['5 mx1.hostinger.com', '10 mx2.hostinger.com'],
+  });
+  result.hasResourceProperties('AWS::Route53::RecordSet', {
+    Type: 'TXT',
+    TTL: '3600',
+    ResourceRecords: ['"v=spf1 include:_spf.mail.hostinger.com ~all"'],
+  });
   result.hasResourceProperties('AWS::Route53::RecordSet', {
     Type: 'TXT',
     ResourceRecords: ['"google-site-verification=test-verification-token"'],

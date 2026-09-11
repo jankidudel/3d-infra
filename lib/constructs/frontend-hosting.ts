@@ -15,6 +15,7 @@ import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import {
   ARecord,
   AaaaRecord,
+  MxRecord,
   PublicHostedZone,
   RecordTarget,
   TxtRecord,
@@ -154,6 +155,19 @@ export class FrontendHosting extends Construct {
         zone: hostedZone,
         recordName: 'www',
         target,
+      });
+      new MxRecord(this, 'HostingerMailExchangeRecord', {
+        zone: hostedZone,
+        ttl: Duration.seconds(14_400),
+        values: [
+          { priority: 5, hostName: 'mx1.hostinger.com' },
+          { priority: 10, hostName: 'mx2.hostinger.com' },
+        ],
+      });
+      new TxtRecord(this, 'HostingerSpfRecord', {
+        zone: hostedZone,
+        ttl: Duration.seconds(3_600),
+        values: ['v=spf1 include:_spf.mail.hostinger.com ~all'],
       });
       if (props.googleSiteVerification) {
         new TxtRecord(this, 'GoogleSiteVerificationRecord', {
