@@ -198,7 +198,7 @@ void test('configures an isolated production custom domain with strict upload CO
     FunctionConfig: { Runtime: 'cloudfront-js-2.0' },
     FunctionCode: Match.stringLikeRegexp('request\\.rawQueryString\\(\\)'),
   });
-  result.resourceCountIs('AWS::Route53::RecordSet', 7);
+  result.resourceCountIs('AWS::Route53::RecordSet', 11);
   result.hasResourceProperties('AWS::Route53::RecordSet', {
     Type: 'MX',
     TTL: '14400',
@@ -208,6 +208,20 @@ void test('configures an isolated production custom domain with strict upload CO
     Type: 'TXT',
     TTL: '3600',
     ResourceRecords: ['"v=spf1 include:_spf.mail.hostinger.com ~all"'],
+  });
+  for (const selector of ['a', 'b', 'c']) {
+    result.hasResourceProperties('AWS::Route53::RecordSet', {
+      Name: `hostingermail-${selector}._domainkey.inspectmesh.com.`,
+      Type: 'CNAME',
+      TTL: '300',
+      ResourceRecords: [`hostingermail-${selector}.dkim.mail.hostinger.com`],
+    });
+  }
+  result.hasResourceProperties('AWS::Route53::RecordSet', {
+    Name: '_dmarc.inspectmesh.com.',
+    Type: 'TXT',
+    TTL: '3600',
+    ResourceRecords: ['"v=DMARC1; p=none"'],
   });
   result.hasResourceProperties('AWS::Route53::RecordSet', {
     Type: 'TXT',

@@ -15,6 +15,7 @@ import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import {
   ARecord,
   AaaaRecord,
+  CnameRecord,
   MxRecord,
   PublicHostedZone,
   RecordTarget,
@@ -168,6 +169,20 @@ export class FrontendHosting extends Construct {
         zone: hostedZone,
         ttl: Duration.seconds(3_600),
         values: ['v=spf1 include:_spf.mail.hostinger.com ~all'],
+      });
+      for (const selector of ['a', 'b', 'c']) {
+        new CnameRecord(this, `HostingerDkim${selector.toUpperCase()}Record`, {
+          zone: hostedZone,
+          recordName: `hostingermail-${selector}._domainkey`,
+          domainName: `hostingermail-${selector}.dkim.mail.hostinger.com`,
+          ttl: Duration.seconds(300),
+        });
+      }
+      new TxtRecord(this, 'DmarcRecord', {
+        zone: hostedZone,
+        recordName: '_dmarc',
+        ttl: Duration.seconds(3_600),
+        values: ['v=DMARC1; p=none'],
       });
       if (props.googleSiteVerification) {
         new TxtRecord(this, 'GoogleSiteVerificationRecord', {
