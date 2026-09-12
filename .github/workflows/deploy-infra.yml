@@ -98,10 +98,15 @@ jobs:
       - name: Deploy infrastructure configuration
         env:
           RATE_LIMIT_SECRET: ${{ secrets.RATE_LIMIT_SECRET }}
+          TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
           DEV_BASIC_AUTHORIZATION: ${{ secrets.DEV_BASIC_AUTHORIZATION }}
         run: |
           if [ -z "$RATE_LIMIT_SECRET" ]; then
             echo "::error::RATE_LIMIT_SECRET is not configured in the selected GitHub Environment."
+            exit 1
+          fi
+          if [ "$STAGE" = "prod" ] && [ -z "$TURNSTILE_SECRET" ]; then
+            echo "::error::TURNSTILE_SECRET is not configured in the prod GitHub Environment."
             exit 1
           fi
           if [ "$STAGE" = "dev" ] && [ -z "$DEV_BASIC_AUTHORIZATION" ]; then
@@ -109,6 +114,9 @@ jobs:
             exit 1
           fi
           PARAMETERS=(--parameters "RateLimitSecret=$RATE_LIMIT_SECRET")
+          if [ "$STAGE" = "prod" ]; then
+            PARAMETERS+=(--parameters "TurnstileSecret=$TURNSTILE_SECRET")
+          fi
           if [ "$STAGE" = "dev" ]; then
             PARAMETERS+=(--parameters "DevBasicAuthAuthorization=$DEV_BASIC_AUTHORIZATION")
           fi

@@ -187,6 +187,7 @@ jobs:
       - name: Deploy with CDK
         env:
           RATE_LIMIT_SECRET: ${{ secrets.RATE_LIMIT_SECRET }}
+          TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
           DEV_BASIC_AUTHORIZATION: ${{ secrets.DEV_BASIC_AUTHORIZATION }}
         working-directory: 3d-infra
         run: |
@@ -194,11 +195,18 @@ jobs:
             echo "::error::RATE_LIMIT_SECRET is not configured in the selected GitHub Environment."
             exit 1
           fi
+          if [ "$STAGE" = "prod" ] && [ -z "$TURNSTILE_SECRET" ]; then
+            echo "::error::TURNSTILE_SECRET is not configured in the prod GitHub Environment."
+            exit 1
+          fi
           if [ "$STAGE" = "dev" ] && [ -z "$DEV_BASIC_AUTHORIZATION" ]; then
             echo "::error::DEV_BASIC_AUTHORIZATION is not configured in the dev GitHub Environment."
             exit 1
           fi
           PARAMETERS=(--parameters "RateLimitSecret=$RATE_LIMIT_SECRET")
+          if [ "$STAGE" = "prod" ]; then
+            PARAMETERS+=(--parameters "TurnstileSecret=$TURNSTILE_SECRET")
+          fi
           if [ "$STAGE" = "dev" ]; then
             PARAMETERS+=(--parameters "DevBasicAuthAuthorization=$DEV_BASIC_AUTHORIZATION")
           fi

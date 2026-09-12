@@ -106,6 +106,8 @@ The production contact form sends directly through Amazon SES to `hello@inspectm
 
 The Turnstile secret is never included in the browser bundle or committed to the repository. SES usage is pay-as-you-go; no SQS queue is created for contact delivery.
 
+Before SES is called, the API enforces three accepted-message limits: 3 per viewer address per UTC hour, 10 per viewer address per UTC day, and 100 globally per UTC day. The global limit is a deliberate cost ceiling for contact delivery.
+
 | Setting                | Context                 | Environment               | Default                               |
 | ---------------------- | ----------------------- | ------------------------- | ------------------------------------- |
 | Processor artifact     | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH` | required                              |
