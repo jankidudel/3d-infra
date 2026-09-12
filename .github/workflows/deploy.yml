@@ -47,6 +47,7 @@ jobs:
       MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
       CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
       GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
+      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
     steps:
       - name: Check out infrastructure
         uses: actions/checkout@v6
@@ -129,6 +130,11 @@ jobs:
       - name: Install frontend dependencies
         working-directory: 3d-frontend
         run: npm ci
+
+      - name: Configure the production contact CAPTCHA
+        if: ${{ inputs.environment == 'prod' }}
+        working-directory: 3d-frontend
+        run: node --experimental-strip-types scripts/configure-contact-captcha.mts
 
       - name: Install Lambda packaging tool
         run: dotnet tool install --global Amazon.Lambda.Tools --version 7.0.0
