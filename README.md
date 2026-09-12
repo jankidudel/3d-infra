@@ -96,6 +96,16 @@ Deployments also require a random `RATE_LIMIT_SECRET` of at least 32 characters.
 work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and
 `npm run deploy -- -c stage=dev --parameters RateLimitSecret="$RATE_LIMIT_SECRET"`.
 
+## Production contact delivery
+
+The production contact form sends directly through Amazon SES to `hello@inspectmesh.com`; it does not use SQS. Before the first production deployment:
+
+1. Create a free Cloudflare Turnstile widget for `www.inspectmesh.com` and add its public site key as `contactCaptchaSiteKey` in `3d-frontend/src/environments/site-config.production.json`.
+2. Store its private secret as `TURNSTILE_SECRET` in the protected production GitHub Environment and pass it to CDK as the no-echo `TurnstileSecret` parameter.
+3. After deployment, open the SES verification message received at `hello@inspectmesh.com` and confirm the identity.
+
+The Turnstile secret is never included in the browser bundle or committed to the repository. SES usage is pay-as-you-go; no SQS queue is created for contact delivery.
+
 | Setting                | Context                 | Environment               | Default                               |
 | ---------------------- | ----------------------- | ------------------------- | ------------------------------------- |
 | Processor artifact     | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH` | required                              |

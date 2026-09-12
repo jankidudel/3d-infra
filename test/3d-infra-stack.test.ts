@@ -44,6 +44,23 @@ void test('takes the rate-limit signing secret from a NoEcho deployment paramete
   result.resourceCountIs('AWS::SecretsManager::Secret', 0);
 });
 
+void test('configures production-only SES contact delivery and a protected Turnstile secret', () => {
+  const production = template(stages.production);
+  production.hasParameter('TurnstileSecret', { NoEcho: true, MinLength: 1 });
+  production.hasResourceProperties('AWS::SES::EmailIdentity', {
+    EmailIdentity: 'hello@inspectmesh.com',
+  });
+  production.hasResourceProperties('AWS::Lambda::Function', {
+    Environment: {
+      Variables: Match.objectLike({
+        CONTACT_EMAIL: 'hello@inspectmesh.com',
+        TURNSTILE_SECRET: { Ref: 'TurnstileSecret' },
+      }),
+    },
+  });
+  template().resourceCountIs('AWS::SES::EmailIdentity', 0);
+});
+
 void test('protects only the development CloudFront distribution with a no-echo Basic Auth parameter', () => {
   const development = template();
   development.hasParameter('DevBasicAuthAuthorization', {

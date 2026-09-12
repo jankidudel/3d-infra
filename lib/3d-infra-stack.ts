@@ -11,6 +11,7 @@ import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Topic } from 'aws-cdk-lib/aws-sns';
+import { CfnEmailIdentity } from 'aws-cdk-lib/aws-ses';
 import { CfnGroup } from 'aws-cdk-lib/aws-resourcegroups';
 import { Construct } from 'constructs';
 import { ProcessingQueue, PROCESSOR_TIMEOUT_SECONDS } from './constructs/processing-queue';
@@ -60,6 +61,22 @@ export class InfraStack extends Stack {
       minLength: 32,
       description: 'Random rate-limit signing secret supplied by the protected GitHub Environment.',
     });
+    const contactEmail = props.stage === stages.production ? 'hello@inspectmesh.com' : undefined;
+    const turnstileSecret =
+      props.stage === stages.production
+        ? new CfnParameter(this, 'TurnstileSecret', {
+            type: 'String',
+            noEcho: true,
+            minLength: 1,
+            description:
+              'Cloudflare Turnstile secret key for the InspectMesh contact form, supplied by the protected GitHub Environment.',
+          })
+        : undefined;
+    if (contactEmail) {
+      new CfnEmailIdentity(this, 'ContactEmailIdentity', {
+        emailIdentity: contactEmail,
+      });
+    }
     const devBasicAuthAuthorization =
       props.stage === stages.development
         ? new CfnParameter(this, 'DevBasicAuthAuthorization', {
@@ -89,6 +106,8 @@ export class InfraStack extends Stack {
       createJobBurstLimit: props.createJobBurstLimit,
       createJobRateLimit: props.createJobRateLimit,
       rateLimitSecret: rateLimitSecret.valueAsString,
+      contactEmail,
+      turnstileSecret: turnstileSecret?.valueAsString,
     });
     Tags.of(api).add('Component', 'api');
     const frontend = new FrontendHosting(this, 'Frontend', {

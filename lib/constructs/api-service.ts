@@ -1,4 +1,4 @@
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { CfnStage, HttpApi, HttpMethod, HttpStage } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Architecture, Code, Function as LambdaFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
@@ -31,6 +31,8 @@ export interface ApiServiceProps {
   readonly createJobBurstLimit?: number;
   readonly createJobRateLimit?: number;
   readonly rateLimitSecret: string;
+  readonly contactEmail?: string;
+  readonly turnstileSecret?: string;
 }
 
 export class ApiService extends Construct {
@@ -70,6 +72,12 @@ export class ApiService extends Construct {
         RATE_LIMIT_TABLE: this.rateLimitTable.tableName,
         RATE_LIMIT_SECRET: props.rateLimitSecret,
         PROCESSING_QUEUE_URL: props.queue.queueUrl,
+        ...(props.contactEmail && props.turnstileSecret
+          ? {
+              CONTACT_EMAIL: props.contactEmail,
+              TURNSTILE_SECRET: props.turnstileSecret,
+            }
+          : {}),
       },
       logGroup,
       // Re-enable Lambda Insights only after reviewing its custom-metric cost.
@@ -94,6 +102,16 @@ export class ApiService extends Construct {
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${THREE_MF_REPAIR_INPUT_SUFFIX}`);
     props.bucket.grantPut(this.function, `${JOBS_PREFIX}*${JOB_METADATA_SUFFIX}`);
     props.queue.grantSendMessages(this.function);
+    if (props.contactEmail) {
+      this.function.addToRolePolicy(
+        new PolicyStatement({
+          actions: ['ses:SendEmail'],
+          resources: [
+            `arn:${Stack.of(this).partition}:ses:${Stack.of(this).region}:${Stack.of(this).account}:identity/${props.contactEmail}`,
+          ],
+        }),
+      );
+    }
     this.function.addToRolePolicy(
       new PolicyStatement({
         actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],
