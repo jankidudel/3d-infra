@@ -40,6 +40,7 @@ export class ApiService extends Construct {
   public readonly api: HttpApi;
   public readonly stage: HttpStage;
   public readonly rateLimitTable: Table;
+  public readonly subscriberTable?: Table;
   public readonly applicationErrors: Metric;
 
   public constructor(scope: Construct, id: string, props: ApiServiceProps) {
@@ -58,6 +59,15 @@ export class ApiService extends Construct {
       timeToLiveAttribute: 'expiresAt',
       removalPolicy: isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
     });
+    this.subscriberTable = props.contactEmail
+      ? new Table(this, 'SubscriberTable', {
+          tableName: `3d-api-subscribers-${props.stage}`,
+          partitionKey: { name: 'subscriberKey', type: AttributeType.STRING },
+          billingMode: BillingMode.PAY_PER_REQUEST,
+          timeToLiveAttribute: 'expiresAt',
+          removalPolicy: RemovalPolicy.RETAIN,
+        })
+      : undefined;
     this.function = new LambdaFunction(this, 'Function', {
       functionName,
       runtime: Runtime.PROVIDED_AL2023,
@@ -72,6 +82,7 @@ export class ApiService extends Construct {
         RATE_LIMIT_TABLE: this.rateLimitTable.tableName,
         RATE_LIMIT_SECRET: props.rateLimitSecret,
         PROCESSING_QUEUE_URL: props.queue.queueUrl,
+        ...(this.subscriberTable ? { SUBSCRIBER_TABLE: this.subscriberTable.tableName } : {}),
         ...(props.contactEmail && props.turnstileSecret
           ? {
               CONTACT_EMAIL: props.contactEmail,
@@ -118,6 +129,9 @@ export class ApiService extends Construct {
         resources: [this.rateLimitTable.tableArn],
       }),
     );
+    if (this.subscriberTable) {
+      this.subscriberTable.grantReadWriteData(this.function);
+    }
 
     const integration = new HttpLambdaIntegration('LambdaIntegration', this.function);
     this.api = new HttpApi(this, 'HttpApi', {

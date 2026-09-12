@@ -44,7 +44,7 @@ void test('takes the rate-limit signing secret from a NoEcho deployment paramete
   result.resourceCountIs('AWS::SecretsManager::Secret', 0);
 });
 
-void test('configures production-only SES contact delivery and a protected Turnstile secret', () => {
+void test('configures production-only contact delivery, subscriptions and a protected Turnstile secret', () => {
   const production = template(stages.production);
   production.hasParameter('TurnstileSecret', { NoEcho: true, MinLength: 1 });
   production.hasResourceProperties('AWS::SES::EmailIdentity', {
@@ -55,10 +55,19 @@ void test('configures production-only SES contact delivery and a protected Turns
       Variables: Match.objectLike({
         CONTACT_EMAIL: 'hello@inspectmesh.com',
         TURNSTILE_SECRET: { Ref: 'TurnstileSecret' },
+        SUBSCRIBER_TABLE: { Ref: Match.stringLikeRegexp('ApiSubscriberTable.*') },
       }),
     },
   });
+  production.hasResourceProperties('AWS::DynamoDB::Table', {
+    TableName: '3d-api-subscribers-prod',
+    KeySchema: [{ AttributeName: 'subscriberKey', KeyType: 'HASH' }],
+    BillingMode: 'PAY_PER_REQUEST',
+    TimeToLiveSpecification: { AttributeName: 'expiresAt', Enabled: true },
+    PointInTimeRecoverySpecification: Match.absent(),
+  });
   template().resourceCountIs('AWS::SES::EmailIdentity', 0);
+  template().resourceCountIs('AWS::DynamoDB::Table', 1);
 });
 
 void test('protects only the development CloudFront distribution with a no-echo Basic Auth parameter', () => {
