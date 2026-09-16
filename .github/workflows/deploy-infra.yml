@@ -1,8 +1,6 @@
 name: deploy-infra
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -19,17 +17,17 @@ permissions:
   id-token: write
 
 concurrency:
-  group: infrastructure-${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+  group: infrastructure-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy infrastructure to ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+    name: Deploy infrastructure to ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+    environment: ${{ inputs.environment }}
     env:
       AWS_REGION: us-east-1
-      STAGE: ${{ github.event_name == 'push' && 'dev' || inputs.environment }}
+      STAGE: ${{ inputs.environment }}
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       BUDGET_ALERT_EMAIL: ${{ vars.BUDGET_ALERT_EMAIL }}
