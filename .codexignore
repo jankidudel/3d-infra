@@ -1,0 +1,13 @@
+# CDK and Node build output.
+node_modules/
+dist/
+cdk.out/
+coverage/
+*.tsbuildinfo
+
+# Local credentials, editor state, and diagnostics.
+.env
+.env.*
+.idea/
+.vscode/
+*.log
