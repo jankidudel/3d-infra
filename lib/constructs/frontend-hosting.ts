@@ -165,11 +165,6 @@ export class FrontendHosting extends Construct {
           { priority: 10, hostName: 'mx2.hostinger.com' },
         ],
       });
-      new TxtRecord(this, 'HostingerSpfRecord', {
-        zone: hostedZone,
-        ttl: Duration.seconds(3_600),
-        values: ['v=spf1 include:_spf.mail.hostinger.com ~all'],
-      });
       for (const selector of ['a', 'b', 'c']) {
         new CnameRecord(this, `HostingerDkim${selector.toUpperCase()}Record`, {
           zone: hostedZone,
@@ -184,12 +179,20 @@ export class FrontendHosting extends Construct {
         ttl: Duration.seconds(3_600),
         values: ['v=DMARC1; p=none'],
       });
-      if (props.googleSiteVerification) {
-        new TxtRecord(this, 'GoogleSiteVerificationRecord', {
-          zone: hostedZone,
-          values: [`google-site-verification=${props.googleSiteVerification}`],
-        });
-      }
+      new TxtRecord(this, 'GoogleSiteVerificationRecord', {
+        zone: hostedZone,
+        ttl: Duration.seconds(3_600),
+        // Route 53 stores all TXT values for the same name in one record set.
+        // Keep SPF and ownership verification together so neither deployment
+        // can replace the other value. Retain this construct ID for a safe
+        // update of the original production record's CloudFormation identity.
+        values: [
+          'v=spf1 include:_spf.mail.hostinger.com ~all',
+          ...(props.googleSiteVerification
+            ? [`google-site-verification=${props.googleSiteVerification}`]
+            : []),
+        ],
+      });
     }
     new BucketDeployment(this, 'Deployment', {
       destinationBucket: this.bucket,

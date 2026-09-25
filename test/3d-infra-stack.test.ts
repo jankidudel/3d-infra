@@ -224,16 +224,29 @@ void test('configures an isolated production custom domain with strict upload CO
     FunctionConfig: { Runtime: 'cloudfront-js-2.0' },
     FunctionCode: Match.stringLikeRegexp('request\\.rawQueryString\\(\\)'),
   });
-  result.resourceCountIs('AWS::Route53::RecordSet', 11);
+  result.resourceCountIs('AWS::Route53::RecordSet', 10);
   result.hasResourceProperties('AWS::Route53::RecordSet', {
     Type: 'MX',
     TTL: '14400',
     ResourceRecords: ['5 mx1.hostinger.com', '10 mx2.hostinger.com'],
   });
-  result.hasResourceProperties('AWS::Route53::RecordSet', {
-    Type: 'TXT',
+  const route53RecordSets = Object.values(
+    result.findResources('AWS::Route53::RecordSet'),
+  ) as Array<{ Properties?: { Name?: unknown; Type?: unknown } }>;
+  const apexTxtRecordSets = route53RecordSets.filter(
+    (resource) =>
+      resource.Properties?.Name === 'inspectmesh.com.' && resource.Properties?.Type === 'TXT',
+  );
+  assert.equal(apexTxtRecordSets.length, 1);
+  assert.deepEqual(apexTxtRecordSets[0]?.Properties, {
+    HostedZoneId: { Ref: 'FrontendHostedZone057FAD69' },
+    Name: 'inspectmesh.com.',
+    ResourceRecords: [
+      '"v=spf1 include:_spf.mail.hostinger.com ~all"',
+      '"google-site-verification=test-verification-token"',
+    ],
     TTL: '3600',
-    ResourceRecords: ['"v=spf1 include:_spf.mail.hostinger.com ~all"'],
+    Type: 'TXT',
   });
   for (const selector of ['a', 'b', 'c']) {
     result.hasResourceProperties('AWS::Route53::RecordSet', {
@@ -248,10 +261,6 @@ void test('configures an isolated production custom domain with strict upload CO
     Type: 'TXT',
     TTL: '3600',
     ResourceRecords: ['"v=DMARC1; p=none"'],
-  });
-  result.hasResourceProperties('AWS::Route53::RecordSet', {
-    Type: 'TXT',
-    ResourceRecords: ['"google-site-verification=test-verification-token"'],
   });
 });
 
