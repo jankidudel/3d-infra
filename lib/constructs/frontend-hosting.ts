@@ -24,11 +24,14 @@ import {
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
+import { CfnFunction, Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import { ApiService } from './api-service';
 import { productionDomain } from '../production-domain';
 import { stages } from '../stages';
 import { basicAuthSpaRewriteFunctionCode, spaRewriteFunctionCode } from './spa-rewrite-function';
+
+const FRONTEND_UPLOAD_MEMORY_MB = 256;
 
 export interface FrontendHostingProps {
   readonly stage: string;
@@ -194,7 +197,7 @@ export class FrontendHosting extends Construct {
         ],
       });
     }
-    new BucketDeployment(this, 'Deployment', {
+    const deployment = new BucketDeployment(this, 'Deployment', {
       destinationBucket: this.bucket,
       sources: [Source.asset(props.artifactPath)],
       // Retain prior content-hashed chunks so an already-open browser tab can
@@ -202,5 +205,14 @@ export class FrontendHosting extends Construct {
       // asset URLs make CloudFront invalidation unnecessary for normal deploys.
       prune: false,
     });
+    // The CLI already transfers files concurrently. Give it enough memory/CPU
+    // without changing BucketDeployment's singleton UUID or ServiceToken:
+    // the memoryLimit prop would select a different singleton for an existing stack.
+    const uploader = deployment.handlerRole.node.scope;
+    const uploaderResource = uploader?.node.defaultChild;
+    if (!(uploader instanceof LambdaFunction) || !(uploaderResource instanceof CfnFunction)) {
+      throw new Error('Cannot locate the CDK frontend uploader to configure its memory safely.');
+    }
+    uploaderResource.addPropertyOverride('MemorySize', FRONTEND_UPLOAD_MEMORY_MB);
   }
 }

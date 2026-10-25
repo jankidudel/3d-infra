@@ -200,6 +200,26 @@ synthesis command is `make synth-real`. Provide `GOOGLE_SITE_VERIFICATION` for r
 production synthesis. The old `deploy-dev` and `destroy-dev` Make targets are removed.
 Production publishing uses the protected manual GitHub workflows below.
 
+## Frontend upload performance
+
+Coordinated releases keep the frontend upload inside CDK's `BucketDeployment`.
+Its AWS CLI S3 sync already supports concurrent transfers (the CLI default is ten
+requests). The upload Lambda is configured with 256 MB instead of Lambda's
+128 MB default, giving it more memory and CPU for extraction, file discovery and
+concurrent S3 requests. This is a performance hypothesis, not a measured speedup;
+compare upload duration and Lambda REPORT records after deploying.
+
+The override changes the existing uploader's `MemorySize` in place. Using CDK's
+`memoryLimit` property changes this version's singleton identity, so we preserve
+the existing Lambda logical ID and custom-resource service token instead. Tests
+lock those identities and retain CDK deployment and `prune: false` behaviour.
+
+Billing impact: compute cost per second doubles at 256 MB compared with
+128 MB. Shorter runtime may offset that increase, but savings are not guaranteed.
+No new resources, alarms, invalidations, storage allocation or provisioned
+concurrency are added; ordinary S3 and logging charges remain. A cancelled GitHub
+run may leave CloudFormation working: wait for an idle stack before retrying.
+
 ## GitHub deployment
 
 Standalone CI workflows are removed from all four repositories. Pushes and pull

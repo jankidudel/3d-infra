@@ -542,3 +542,19 @@ void test('revalidates frontend documents while caching immutable assets', () =>
   result.hasOutput('FrontendDistributionId', {});
   result.hasOutput('FrontendUrl', {});
 });
+
+void test('gives the existing frontend upload helper more CPU without replacing its service token', () => {
+  const uploaderId = 'CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C81C01536';
+  for (const stage of [stages.development, stages.production]) {
+    const result = template(stage);
+    const uploaders = result.findResources('AWS::Lambda::Function', {
+      Properties: Match.objectLike({ MemorySize: 256, Timeout: 900 }),
+    });
+    assert.deepEqual(Object.keys(uploaders), [uploaderId]);
+    result.resourceCountIs('Custom::CDKBucketDeployment', 1);
+    result.hasResourceProperties('Custom::CDKBucketDeployment', {
+      ServiceToken: { 'Fn::GetAtt': [uploaderId, 'Arn'] },
+      Prune: false,
+    });
+  }
+});

@@ -59,53 +59,82 @@ async function assertStackIdle(): Promise<void> {
   console.log(`${stackName}: pre-deployment status ${status}.`);
 }
 
+function diagnosticReason(error: unknown): string {
+  // Report only known error categories, never raw stderr or command arguments.
+  const failure = error as { stderr?: string; killed?: boolean; code?: string };
+  const known = failure.stderr?.match(
+    /\b(AccessDenied(?:Exception)?|UnauthorizedOperation|ExpiredToken(?:Exception)?|InvalidClientTokenId|Throttling(?:Exception)?|ValidationError)\b/,
+  );
+  if (known) {
+    return known[1]!;
+  }
+  if (failure.killed) {
+    return 'request timed out';
+  }
+  return 'request failed; check AWS access and connectivity';
+}
+
+async function diagnosticRead(operation: string, args: string[]): Promise<string | undefined> {
+  try {
+    return await aws(['cloudformation', operation, '--stack-name', stackName, ...args]);
+  } catch (error: unknown) {
+    console.log(
+      `::warning::Could not refresh AWS deployment diagnostics (${operation}: ${diagnosticReason(error)}). CDK continues running.`,
+    );
+    return undefined;
+  }
+}
+
 async function reportProgress(startedAt: number): Promise<void> {
   const elapsedMinutes = Math.floor((Date.now() - startedAt) / 60_000);
   console.log(
     `[${new Date().toISOString()}] ${stackName}: deployment still running (${elapsedMinutes} min).`,
   );
-  try {
-    console.log(`CloudFormation status: ${await stackStatus()}`);
-    // Print only event identifiers and states, never template parameters or raw Lambda logs.
-    const events = await aws([
-      'cloudformation',
-      'describe-stack-events',
-      '--stack-name',
-      stackName,
-      '--query',
-      'StackEvents[0:5].[Timestamp,LogicalResourceId,ResourceStatus]',
-      '--output',
-      'table',
-      '--no-paginate',
-    ]);
+  const status = await diagnosticRead('describe-stacks', [
+    '--query',
+    'Stacks[0].StackStatus',
+    '--output',
+    'text',
+  ]);
+  if (status) {
+    console.log(`CloudFormation status: ${status}`);
+  }
+  // Independent reads: denied event access must not suppress later diagnostics.
+  const events = await diagnosticRead('describe-stack-events', [
+    '--query',
+    'StackEvents[0:5].[Timestamp,LogicalResourceId,ResourceStatus]',
+    '--output',
+    'json',
+    '--no-paginate',
+  ]);
+  if (events) {
     console.log(events);
-    if (Date.now() - startedAt >= warningAfterMs) {
-      console.log(
-        '::warning::Deployment has been running for at least 10 minutes. Check the latest AWS events; elapsed time alone does not prove a failure. Do not start a replacement update or assume cancelling this run stops AWS.',
-      );
-      const helpers = await aws([
-        'cloudformation',
-        'describe-stack-resources',
-        '--stack-name',
-        stackName,
-        '--query',
-        "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'CustomCDKBucketDeployment')].PhysicalResourceId",
-        '--output',
-        'json',
-      ]);
-      const names = JSON.parse(helpers) as string[];
-      for (const name of names) {
-        const logGroup = `/aws/lambda/${name}`;
-        console.log(`Frontend upload helper logs: ${logGroup}`);
-        console.log(
-          `Find this group in https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#logsV2:log-groups`,
-        );
+  }
+  if (Date.now() - startedAt >= warningAfterMs) {
+    console.log(
+      '::warning::Deployment has been running for at least 10 minutes. Check the latest AWS events; elapsed time alone does not prove a failure. Cancelling GitHub does not stop AWS.',
+    );
+    // Locate the legacy uploader during the one-time migration away from CDK uploads.
+    const helpers = await diagnosticRead('describe-stack-resources', [
+      '--query',
+      "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'CustomCDKBucketDeployment')].PhysicalResourceId",
+      '--output',
+      'json',
+    ]);
+    if (helpers) {
+      try {
+        const names: unknown = JSON.parse(helpers);
+        if (Array.isArray(names)) {
+          for (const name of names) {
+            if (typeof name === 'string' && /^[A-Za-z0-9_-]+$/.test(name)) {
+              console.log(`Legacy frontend upload helper logs: /aws/lambda/${name}`);
+            }
+          }
+        }
+      } catch {
+        console.log('::warning::AWS returned an unreadable legacy helper resource list.');
       }
     }
-  } catch {
-    console.log(
-      '::warning::Could not refresh AWS deployment diagnostics. CDK is still running; a missing status response is not a failed deployment.',
-    );
   }
 }
 

@@ -24,7 +24,7 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.COMMAND_LOG, JSON.stringify(['aws', ...args]) + '\\n');
 const statusCalls = fs.readFileSync(process.env.COMMAND_LOG, 'utf8').split('\\n').filter(line => line.includes('describe-stacks')).length;
-if (process.env.SCENARIO === 'denied' || (process.env.SCENARIO === 'diagnostics-fail' && statusCalls > 1)) {
+if (process.env.SCENARIO === 'denied' || (process.env.SCENARIO === 'diagnostics-fail' && statusCalls > 1) || (process.env.SCENARIO === 'events-denied' && args.includes('describe-stack-events'))) {
   console.error('AccessDenied secret-must-not-leak'); process.exit(1);
 }
 if (process.env.SCENARIO === 'missing' && args.includes('describe-stacks')) {
@@ -159,4 +159,12 @@ void test('both production infrastructure workflows share a non-cancelling queue
     assert.match(workflow, /STAGE: prod/);
     assert.doesNotMatch(workflow, /inputs.environment|DEV_BASIC_AUTHORIZATION/);
   }
+});
+
+void test('identifies denied event reads while preserving stack status and deployment success', async () => {
+  const result = await simulate({ SCENARIO: 'events-denied', CDK_DELAY: '1600' });
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /CloudFormation status: UPDATE_COMPLETE/);
+  assert.match(result.stdout, /describe-stack-events: AccessDenied/);
+  assert.doesNotMatch(result.stdout, /secret-must-not-leak/);
 });
