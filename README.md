@@ -202,6 +202,10 @@ Production publishing uses the protected manual GitHub workflows below.
 
 ## GitHub deployment
 
+Standalone CI workflows are removed from all four repositories. Pushes and pull
+requests do not start checks automatically. Manual deployment workflows run their
+existing validation before publishing; local validation commands remain available.
+
 `.github/workflows/deploy.yml` (`deploy-all`) is started manually with
 `workflow_dispatch`. Select a branch, tag or commit for each application repository;
 the default reference is `main`. The workflow verifies all four repositories and
