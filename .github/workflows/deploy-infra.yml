@@ -2,32 +2,35 @@ name: deploy-infra
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: GitHub Environment and AWS stage to deploy
-        required: true
-        default: dev
-        type: choice
-        options:
-          - dev
-          - prod
+    # Hosted development is disabled. For future re-enablement, restore this
+    # selector and wire job environment, STAGE and concurrency to its value.
+    # inputs:
+    #   environment:
+    #     description: GitHub Environment and AWS stage to deploy
+    #     required: true
+    #     default: prod
+    #     type: choice
+    #     options:
+    #       - prod
+    #       - dev
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: infrastructure-${{ inputs.environment }}
+  group: infrastructure
   cancel-in-progress: false
+  queue: max
 
 jobs:
   deploy:
-    name: Deploy infrastructure to ${{ inputs.environment }}
+    name: Deploy infrastructure to prod
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment: prod
     env:
       AWS_REGION: us-east-1
-      STAGE: ${{ inputs.environment }}
+      STAGE: prod
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       BUDGET_ALERT_EMAIL: ${{ vars.BUDGET_ALERT_EMAIL }}
@@ -97,7 +100,6 @@ jobs:
         env:
           RATE_LIMIT_SECRET: ${{ secrets.RATE_LIMIT_SECRET }}
           TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
-          DEV_BASIC_AUTHORIZATION: ${{ secrets.DEV_BASIC_AUTHORIZATION }}
         run: |
           if [ -z "$RATE_LIMIT_SECRET" ]; then
             echo "::error::RATE_LIMIT_SECRET is not configured in the selected GitHub Environment."
@@ -107,19 +109,12 @@ jobs:
             echo "::error::TURNSTILE_SECRET is not configured in the prod GitHub Environment."
             exit 1
           fi
-          if [ "$STAGE" = "dev" ] && [ -z "$DEV_BASIC_AUTHORIZATION" ]; then
-            echo "::error::DEV_BASIC_AUTHORIZATION is not configured in the dev GitHub Environment."
-            exit 1
-          fi
           PARAMETERS=(--parameters "RateLimitSecret=$RATE_LIMIT_SECRET")
           if [ "$STAGE" = "prod" ]; then
             PARAMETERS+=(--parameters "TurnstileSecret=$TURNSTILE_SECRET")
           fi
-          if [ "$STAGE" = "dev" ]; then
-            PARAMETERS+=(--parameters "DevBasicAuthAuthorization=$DEV_BASIC_AUTHORIZATION")
-          fi
           PROCESSOR_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-processor.zip" \
           API_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-api.zip" \
           FRONTEND_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/frontend" \
-          npx cdk deploy -c stage="$STAGE" --require-approval never \
+          npx ts-node bin/deploy-with-progress.ts -c stage="$STAGE" --require-approval never \
           "${PARAMETERS[@]}" --outputs-file cdk-outputs.json

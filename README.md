@@ -19,8 +19,7 @@ terminal failure results live in S3. The Go API runs in Lambda behind a throttle
 HTTP API. CloudFront serves the private frontend bucket and proxies `/api/*` to
 API Gateway.
 
-API Gateway allows development traffic at 1 request per second with a burst of 1,
-and production traffic at 2 requests per second with a burst of 4; rejected requests
+Production API Gateway allows 2 requests per second with a burst of 4; rejected requests
 receive HTTP 429 before Lambda runs or an S3 upload form is issued. Reserved
 concurrency is not configured for the API Lambda because accounts with small
 concurrency quotas must retain AWS's minimum unreserved pool. These API Gateway
@@ -57,11 +56,8 @@ Each application repository owns its build artifact. `3d-processor` and `3d-api`
 produce Lambda ZIP files; `3d-frontend` produces a static browser directory.
 `3d-infra` receives and deploys those artifacts without compiling application code.
 
-The frontend artifact uses Angular's optimized `deployment-development`
-configuration for `STAGE=dev` and its `production` configuration for `STAGE=prod`.
-The dev deployment configuration uses `environment.development.ts` without local
-debug source maps, while `ng serve` continues to use the full `development`
-configuration.
+Hosted deployments use the production frontend build only. `ng serve` retains its
+local development configuration and local development remains noindex.
 
 ```bash
 export PROCESSOR_ARTIFACT_PATH=/absolute/path/to/processor.zip
@@ -75,7 +71,9 @@ processor repository provides this SQS/S3 Lambda adapter alongside its CLI.
 
 ## Build, test, and deploy
 
-Stage comes from `-c stage=...` or `STAGE` and defaults to `dev`.
+Hosted deployment is production-only. Stage defaults to `prod`; the CDK entry point
+and Makefiles reject `dev` and other stage values. Legacy development construct cases
+remain available for tests and future re-enablement; the entry point currently blocks them.
 
 ```bash
 npm run build
@@ -85,16 +83,16 @@ npm run lint
 export PROCESSOR_ARTIFACT_PATH=/absolute/path/to/processor.zip
 export API_ARTIFACT_PATH=/absolute/path/to/3d-api.zip
 export FRONTEND_ARTIFACT_PATH=/absolute/path/to/frontend/browser
-npx cdk synth -c stage=dev
-npx cdk diff -c stage=dev
-npx cdk deploy -c stage=dev --parameters RateLimitSecret="$RATE_LIMIT_SECRET"
-npx cdk destroy -c stage=dev
+npx cdk synth -c stage=prod
+npx cdk diff -c stage=prod
+npx cdk deploy -c stage=prod --parameters RateLimitSecret="$RATE_LIMIT_SECRET" --parameters TurnstileSecret="$TURNSTILE_SECRET"
 ```
 
 All three artifact paths are required by the CDK entry point for these direct commands.
-Deployments also require a random `RATE_LIMIT_SECRET` of at least 32 characters. The npm wrappers
-work as `npm run synth -- -c stage=dev`, `npm run diff -- -c stage=dev`, and
-`npm run deploy -- -c stage=dev --parameters RateLimitSecret="$RATE_LIMIT_SECRET"`.
+Production synthesis requires `GOOGLE_SITE_VERIFICATION`. Deployments also require
+a random `RATE_LIMIT_SECRET` of at least 32 characters and `TURNSTILE_SECRET`. The npm wrappers
+work as `npm run synth -- -c stage=prod`, `npm run diff -- -c stage=prod`, and
+`npm run deploy -- -c stage=prod --parameters RateLimitSecret="$RATE_LIMIT_SECRET"`.
 
 ## Production contact delivery
 
@@ -108,25 +106,23 @@ The Turnstile secret is never included in the browser bundle or committed to the
 
 Before SES is called, the API enforces two accepted-message limits: 10 per viewer address per UTC day and 1,000 globally per UTC day. The global limit is a deliberate cost ceiling for contact delivery.
 
-| Setting                | Context                 | Environment               | Default                               |
-| ---------------------- | ----------------------- | ------------------------- | ------------------------------------- |
-| Processor artifact     | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH` | required                              |
-| API artifact           | `apiArtifactPath`       | `API_ARTIFACT_PATH`       | required                              |
-| Frontend artifact      | `frontendArtifactPath`  | `FRONTEND_ARTIFACT_PATH`  | required                              |
-| Memory (MB)            | `processorMemory`       | `PROCESSOR_MEMORY_MB`     | `256`                                 |
-| Browser upload origin  | `corsOrigin`            | `CORS_ORIGIN`             | localhost (dev), canonical URL (prod) |
-| Monthly budget (USD)   | `monthlyBudgetUsd`      | `MONTHLY_BUDGET_USD`      | `10` when alerts are enabled          |
-| Budget alert email     | `budgetAlertEmail`      | `BUDGET_ALERT_EMAIL`      | disabled when omitted                 |
-| Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted     |
-| Create-job burst limit | `createJobBurstLimit`   | `CREATE_JOB_BURST_LIMIT`  | `1` (dev), `4` (prod)                 |
-| Create-job rate/second | `createJobRateLimit`    | `CREATE_JOB_RATE_LIMIT`   | `1` (dev), `2` (prod)                 |
+| Setting                | Context                 | Environment               | Default                           |
+| ---------------------- | ----------------------- | ------------------------- | --------------------------------- |
+| Processor artifact     | `processorArtifactPath` | `PROCESSOR_ARTIFACT_PATH` | required                          |
+| API artifact           | `apiArtifactPath`       | `API_ARTIFACT_PATH`       | required                          |
+| Frontend artifact      | `frontendArtifactPath`  | `FRONTEND_ARTIFACT_PATH`  | required                          |
+| Memory (MB)            | `processorMemory`       | `PROCESSOR_MEMORY_MB`     | `256`                             |
+| Browser upload origin  | `corsOrigin`            | `CORS_ORIGIN`             | canonical production URL          |
+| Monthly budget (USD)   | `monthlyBudgetUsd`      | `MONTHLY_BUDGET_USD`      | `10` when alerts are enabled      |
+| Budget alert email     | `budgetAlertEmail`      | `BUDGET_ALERT_EMAIL`      | disabled when omitted             |
+| Operations alert email | `operationsAlertEmail`  | `OPERATIONS_ALERT_EMAIL`  | alarms have no email when omitted |
+| Create-job burst limit | `createJobBurstLimit`   | `CREATE_JOB_BURST_LIMIT`  | `4`                               |
+| Create-job rate/second | `createJobRateLimit`    | `CREATE_JOB_RATE_LIMIT`   | `2`                               |
 
-Development always permits uploads from `http://localhost:4200`, including when another
-non-wildcard `CORS_ORIGIN` is configured. Production CORS is fixed to
-`https://www.inspectmesh.com`; a different non-empty `CORS_ORIGIN` fails synthesis. This
-does not make the bucket public or authorize unsigned requests. Production retains the bucket
-and its contents when the stack is deleted; development enables bucket cleanup. Review the
-CloudFormation diff before every production deployment.
+Production CORS is fixed to `https://www.inspectmesh.com`; a different non-empty
+`CORS_ORIGIN` fails synthesis. This does not make the bucket public or authorize
+unsigned requests. Production retains its storage buckets and contents when the
+stack is deleted. Review the CloudFormation diff before every production deployment.
 
 Processor logs use the same lifecycle policy in every stage. A newly created log group is
 deleted if its initial deployment rolls back, preventing an empty orphan from blocking a
@@ -153,11 +149,7 @@ CloudFront serves Angular's prerendered HTML for clean routes such as
 uploads fingerprinted JavaScript, CSS and font assets with a one-year immutable
 browser cache policy, while HTML and stable public files revalidate on every
 refresh. CloudFront optimizes JavaScript and CSS cache delivery; `/api/*` is
-forwarded to API Gateway with caching disabled. The development distribution
-uses CloudFront pay-as-you-go pricing; its `/api/*` behavior remains a
-CloudFront-to-API-Gateway proxy. Frontend deployments
-invalidate only mutable document paths; they never invalidate or delete hashed
-chunks. To clear a document manually, use the `FrontendDistributionId` stack
+forwarded to API Gateway with caching disabled. Frontend deployments do not request invalidations or delete hashed chunks. To clear a document manually, use the `FrontendDistributionId` stack
 output:
 
 ```sh
@@ -173,7 +165,7 @@ byte-match scope because that condition is not available on CloudFront's Free pl
 
 The production ACL is managed by this stack and is retained if the stack is removed.
 
-The development distribution remains pay-as-you-go and has no Web ACL. In
+In
 **3d-prod CloudFront - Manage plan**, select the Free plan and attach the
 `inspectmesh.com` hosted zone in the same account to the distribution using that
 domain.
@@ -198,66 +190,68 @@ ignored `dist/` directory before running `node --test`; no external test framewo
 `npm run test:synth` exercises the real CDK entry point with a test-only placeholder
 artifact. It is included in the pre-commit checks and never deploys anything.
 
-## Simplified workspace deployment
+## Workspace validation
 
-When all application repositories are checked out as siblings, use the versioned Makefile:
-
-```sh
-make bootstrap
-make synth-fast
-make synth-real
-make diff-dev
-make deploy-dev
-make destroy-dev
-```
-
-These are separate operations:
-
-- `make deploy-dev` builds all three applications, then creates or updates the development stack.
-- `make destroy-dev` deletes the development stack. It passes test artifacts only because
-  the shared CDK entry point validates artifact paths; it does not build applications.
-
-`make synth-real`, `make diff-dev`, and `make deploy-dev` build all application artifacts
-and pass them to CDK. There is no manual ZIP creation or copying. Direct npm commands
-remain available for standalone or CI usage and intentionally require all three artifact
-path variables.
-
-The default sibling path can be overridden when repositories live elsewhere:
-
-```sh
-make deploy-dev \
-  PROCESSOR_DIR=/absolute/path/to/3d-processor \
-  API_DIR=/absolute/path/to/3d-api \
-  FRONTEND_DIR=/absolute/path/to/3d-frontend
-```
+From the workspace root, `make check` checks all four repositories; `make synth-fast`
+synthesizes production with fixture artifacts and a fixture verification token, without
+calling deploy. `make synth` builds real application artifacts before synthesis and
+`make diff-prod` compares production with AWS. In this repository the equivalent real
+synthesis command is `make synth-real`. Provide `GOOGLE_SITE_VERIFICATION` for real
+production synthesis. The old `deploy-dev` and `destroy-dev` Make targets are removed.
+Production publishing uses the protected manual GitHub workflows below.
 
 ## GitHub deployment
 
-`.github/workflows/deploy.yml` provides continuous deployment without storing
-long-lived AWS access keys. A push to `3d-infra/main` verifies all four repositories
-and deploys the `dev` stage. The workflow can also be started manually with
-`workflow_dispatch`; manual runs can select `dev` or `prod` and a branch, tag, or commit for
-each application repository.
+`.github/workflows/deploy.yml` (`deploy-all`) is started manually with
+`workflow_dispatch`. Select a branch, tag or commit for each application repository;
+the default reference is `main`. The workflow verifies all four repositories and
+deploys to the protected `prod` GitHub Environment using temporary AWS credentials.
+All deployment workflows target production explicitly; there is no environment picker.
+Pushes do not start a deployment. `npm run verify` builds and checks the production
+frontend once and that same artifact is deployed.
 
-The workflow checks out `main` from each application repository for an automatic dev
-deployment. A change pushed only to an application repository does not trigger this
-infrastructure workflow. Until cross-repository release dispatch is added, start the
-deployment manually after such a change or update `3d-infra/main` as part of the
-coordinated release.
+For frontend-only changes, use `deploy-frontend` in `3d-frontend`. It uploads directly
+from the GitHub runner, avoiding the CDK bucket-deployment Lambda. Use `deploy-all`
+for coordinated releases and `deploy-infra` for infrastructure configuration changes.
 
-Configure these GitHub Environments in the `3d-infra` repository:
+`deploy-all` and `deploy-infra` share one repository-wide `infrastructure` concurrency
+queue. Production infrastructure updates execute one at a time and running updates
+are never automatically cancelled. The queue does not cover local CLI deployments
+or workflows in other repositories; avoid running those against a stack being updated.
 
-- `dev` — optionally require reviewer approval while the deployment is new.
-- `prod` — require reviewer approval and restrict which branches may deploy.
+Both workflows use `bin/deploy-with-progress.ts`. It checks that the target stack
+has no operation in progress before invoking CDK, uses line-oriented CDK events,
+and prints an independent CloudFormation status/event snapshot every 60 seconds.
+After ten minutes it prints a diagnostic warning and the upload helper's log group
+when available. The warning is based on total elapsed time, not proof of a stalled
+resource. Diagnostic API calls have bounded timeouts and do not turn a successful
+deployment into a failure if a status refresh is unavailable. CDK's exit status is
+preserved. Raw Lambda logs and deployment parameter values are not echoed by the
+monitor.
 
-Set the following environment variables in both environments as appropriate:
+If GitHub output is quiet, compare the reported AWS event timestamps. A resource
+still marked `UPDATE_IN_PROGRESS` in CloudFormation is an AWS-side wait, not merely
+a lost GitHub progress display. Inspect the helper log group for timeouts, memory
+errors, throttling, S3 failures or a failed custom-resource response. These are
+possible causes, not diagnoses from elapsed time alone. Cancelling a GitHub run
+does not cancel the CloudFormation operation; inspect its state before retrying.
+The wrapper never requests stack cancellation, rollback or deletion automatically.
+
+These controls create no AWS resources, alarms, log groups, invalidations or
+provisioned capacity. They add bounded read-only CloudFormation API requests and
+GitHub log output. They do not repair or interrupt an update already running.
+
+Configure the `prod` GitHub Environment in each component repository and
+`3d-infra`, with reviewer approval and deployment branch restrictions.
+
+Set the following production environment variables as appropriate:
 
 | GitHub environment value | Kind     | Purpose                                                                  |
 | ------------------------ | -------- | ------------------------------------------------------------------------ |
 | `AWS_DEPLOY_ROLE_ARN`    | Variable | IAM role assumed through GitHub OIDC                                     |
 | `AWS_ACCOUNT_ID`         | Variable | Expected AWS account; prevents accidental cross-account deployment       |
 | `MONTHLY_BUDGET_USD`     | Variable | Monthly project budget; for example `10`                                 |
-| `CORS_ORIGIN`            | Variable | Optional development upload origin; production is fixed in CDK           |
+| `CORS_ORIGIN`            | Variable | Production origin is fixed in CDK                                        |
 | `BUDGET_ALERT_EMAIL`     | Variable | Recipient for AWS Budget notifications                                   |
 | `OPERATIONS_ALERT_EMAIL` | Variable | Recipient for CloudWatch alarm notifications                             |
 | `RATE_LIMIT_SECRET`      | Secret   | Random, stage-specific rate-limit signing secret; at least 32 characters |
@@ -270,7 +264,7 @@ using a fine-grained token or GitHub App token with read-only Contents access to
 In AWS, create the GitHub OIDC provider for
 `https://token.actions.githubusercontent.com` with audience `sts.amazonaws.com`, then
 create a deployment role whose trust policy is restricted to this repository and the
-`dev`/`prod` GitHub environments. Grant that role only the CDK bootstrap and
+`prod` GitHub Environment. Grant that role only the CDK bootstrap and
 CloudFormation deployment permissions required by this stack. The workflow's
 `id-token: write` permission lets it request a signed GitHub identity token; AWS STS
 validates the token and returns temporary credentials for that workflow run. GitHub
@@ -284,22 +278,47 @@ dependency and allow that stack to modify its own deployment identity.
 `npm install` configures Git to use the tracked `.githooks` directory. Every commit then
 runs the same `npm run precommit` checks automatically.
 
-# Development CloudFront access
+## Re-enable hosted development in future
 
-The `dev` CloudFront distribution requires HTTP Basic Authentication for every
-viewer request, including `/api/*`. Add `DEV_BASIC_AUTHORIZATION` as a secret
-to the `dev` GitHub Environment only. Its value must be the full HTTP
-authorization header, for example `Basic dXNlcjpwYXNzd29yZA==`, where the
-encoded portion is base64 of `username:password` with no trailing newline.
+Development infrastructure constructs and their tests are preserved. The workflow
+files keep the environment selector commented out, with `prod` as its default.
+The frontend retains its dormant `build:deployment-development` script and optimized,
+noindex Angular configuration. Nothing in the current workflows selects or deploys dev.
 
-Generate it locally without printing the password in shell history:
+To re-enable it deliberately, restore the commented selector in each deployment
+workflow (merge it into the existing component inputs in `deploy-all`), wire job
+`environment`, `STAGE` and concurrency to that selection, and update the production-only
+guards in `lib/stages.ts`, `bin/deploy-with-progress.ts` and both Makefiles together.
+The stage helper and Makefiles include commented development cases. For `deploy-all`,
+keep reusing the verified build for prod; dev needs its own noindex build after verification.
 
-```sh
-read -r -p 'Username: ' username
-read -r -s -p 'Password: ' password
-printf 'Basic %s' "$(printf '%s:%s' "$username" "$password" | base64)"
-```
+Restore the `dev` GitHub Environment and dev-only OIDC trust, plus the private hosting
+secret for infrastructure deployments. The preserved `DevBasicAuthAuthorization`
+parameter expects the full `Basic <base64(username:password)>` authorization header;
+pass it only for dev via the `DEV_BASIC_AUTHORIZATION` GitHub Environment secret.
+Keep production Turnstile configuration scoped to prod and verify the development
+robots/canonical output before publishing. Review AWS costs and the stack diff first:
+a hosted dev stack can incur storage, requests, transfer, Lambda and logging charges.
 
-Do not add this secret to `prod`. Basic Authentication is a practical private
-development gate, not an application identity system. It protects CloudFront;
-the direct API Gateway hostname remains a separate API endpoint.
+## Optional cleanup of the existing hosted development environment
+
+Source changes disable new dev deployments but do not delete resources already in AWS
+or remove external GitHub Environments. Using authenticated access to the correct AWS
+account and `us-east-1`, inspect `three-d-infra-dev` and its resources, outputs, status
+and retention policies before deletion. Do not target `three-d-infra-prod`.
+
+The legacy dev bucket definitions enable automatic object deletion. Deleting the dev
+stack can therefore permanently remove uploaded jobs, reports and frontend files.
+After confirming its inventory and resolving any active stack operation, delete only
+the identified dev stack through CloudFormation and wait for `DELETE_COMPLETE`.
+Inspect retained dev log groups separately; do not delete shared CDK bootstrap assets,
+OIDC providers, account-wide budgets or production resources. Retained logs may continue
+to incur storage charges. Cleanup can incur ordinary deletion/helper invocation usage;
+it creates no replacement hosted environment and removes ongoing dev resource usage.
+
+After no old dev deployment is running, remove the `dev` GitHub Environment and its
+secrets from all four repositories, and revoke dev-only deployment-role trust. Keep the
+`prod` GitHub Environment, its approval rules, secrets and OIDC trust intact. GitHub
+settings and AWS deletion require live authenticated access; do not infer completion
+from changed source files. Local `ng serve` and local API/processor workflows remain
+available. Private/noindex behaviour in local development remains intentional.

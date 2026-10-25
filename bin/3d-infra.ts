@@ -2,13 +2,10 @@
 import { App } from 'aws-cdk-lib';
 import { InfraStack } from '../lib/3d-infra-stack';
 import { productionDomain } from '../lib/production-domain';
-import { stages } from '../lib/stages';
+import { deploymentStage, stages } from '../lib/stages';
 
 const app = new App();
-const stage = String(app.node.tryGetContext('stage') ?? process.env.STAGE ?? stages.development);
-if (!/^[a-z][a-z0-9-]*$/.test(stage)) {
-  throw new Error(`Invalid stage "${stage}"`);
-}
+const stage = deploymentStage(app.node.tryGetContext('stage') ?? process.env.STAGE);
 const configuredCorsOrigin = String(
   app.node.tryGetContext('corsOrigin') ?? process.env.CORS_ORIGIN ?? '',
 ).trim();

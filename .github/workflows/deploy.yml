@@ -3,14 +3,16 @@ name: deploy-all
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: GitHub Environment and AWS stage to deploy
-        required: true
-        default: dev
-        type: choice
-        options:
-          - dev
-          - prod
+      # Hosted development is disabled. For future re-enablement, restore this
+      # selector and wire job environment, STAGE and concurrency to its value.
+      # environment:
+      #   description: GitHub Environment and AWS stage to deploy
+      #   required: true
+      #   default: prod
+      #   type: choice
+      #   options:
+      #     - prod
+      #     - dev
       processor_ref:
         description: 3d-processor branch, tag, or commit
         required: true
@@ -29,17 +31,19 @@ permissions:
   id-token: write
 
 concurrency:
-  group: infrastructure-${{ inputs.environment || 'dev' }}
+  # Never overlap or interrupt production infrastructure updates.
+  group: infrastructure
   cancel-in-progress: false
+  queue: max
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.environment || 'dev' }}
+    name: Deploy prod
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment || 'dev' }}
+    environment: prod
     env:
       AWS_REGION: us-east-1
-      STAGE: ${{ inputs.environment || 'dev' }}
+      STAGE: prod
       AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       BUDGET_ALERT_EMAIL: ${{ vars.BUDGET_ALERT_EMAIL }}
@@ -132,7 +136,6 @@ jobs:
         run: npm ci
 
       - name: Configure the production contact CAPTCHA
-        if: ${{ inputs.environment == 'prod' }}
         working-directory: 3d-frontend
         run: node --experimental-strip-types scripts/configure-contact-captcha.mts
 
@@ -155,9 +158,10 @@ jobs:
         working-directory: 3d-frontend
         run: npm run verify
 
-      - name: Build deployment artifacts
+      # Reuse the production frontend built and checked by verify.
+      - name: Build backend deployment artifacts
         working-directory: 3d-infra
-        run: make application-artifacts
+        run: make backend-artifacts
 
       - name: Show non-secret OIDC claims
         uses: actions/github-script@v8
@@ -194,7 +198,6 @@ jobs:
         env:
           RATE_LIMIT_SECRET: ${{ secrets.RATE_LIMIT_SECRET }}
           TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
-          DEV_BASIC_AUTHORIZATION: ${{ secrets.DEV_BASIC_AUTHORIZATION }}
         working-directory: 3d-infra
         run: |
           if [ -z "$RATE_LIMIT_SECRET" ]; then
@@ -205,25 +208,17 @@ jobs:
             echo "::error::TURNSTILE_SECRET is not configured in the prod GitHub Environment."
             exit 1
           fi
-          if [ "$STAGE" = "dev" ] && [ -z "$DEV_BASIC_AUTHORIZATION" ]; then
-            echo "::error::DEV_BASIC_AUTHORIZATION is not configured in the dev GitHub Environment."
-            exit 1
-          fi
           PARAMETERS=(--parameters "RateLimitSecret=$RATE_LIMIT_SECRET")
           if [ "$STAGE" = "prod" ]; then
             PARAMETERS+=(--parameters "TurnstileSecret=$TURNSTILE_SECRET")
           fi
-          if [ "$STAGE" = "dev" ]; then
-            PARAMETERS+=(--parameters "DevBasicAuthAuthorization=$DEV_BASIC_AUTHORIZATION")
-          fi
           PROCESSOR_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-processor/artifacts/3d-processor.zip" \
           API_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-api/artifacts/3d-api.zip" \
           FRONTEND_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-frontend/dist/3d-frontend/browser" \
-          npx cdk deploy -c stage="$STAGE" --require-approval never \
+          npx ts-node bin/deploy-with-progress.ts -c stage="$STAGE" --require-approval never \
           "${PARAMETERS[@]}" --outputs-file cdk-outputs.json
 
       - name: Report production DNS and deployment details
-        if: ${{ inputs.environment == 'prod' }}
         working-directory: 3d-infra
         run: |
           echo "Production canonical URL: https://www.inspectmesh.com"

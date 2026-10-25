@@ -8,7 +8,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "test:synth": "cdk synth -c stage=dev -c processorArtifactPath=test/fixtures/processor -c apiArtifactPath=test/fixtures/api -c frontendArtifactPath=test/fixtures/frontend --quiet",
+    "test:synth": "cdk synth -c stage=prod -c googleSiteVerification=test-verification-token -c processorArtifactPath=test/fixtures/processor -c apiArtifactPath=test/fixtures/api -c frontendArtifactPath=test/fixtures/frontend --quiet",
     "precommit": "npm run format:check && npm run lint && npm run build && npm test && npm run test:synth",
     "prepare": "git config core.hooksPath .githooks",
     "synth": "cdk synth",
