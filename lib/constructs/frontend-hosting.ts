@@ -23,7 +23,7 @@ import {
 } from 'aws-cdk-lib/aws-route53';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
-import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
+import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { CfnFunction, Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import { ApiService } from './api-service';
@@ -90,6 +90,16 @@ export class FrontendHosting extends Construct {
     const frontendOrigin = S3BucketOrigin.withOriginAccessControl(this.bucket);
     // Use AWS's managed policy so the distribution needs no custom policy resource.
     const responseHeadersPolicy = ResponseHeadersPolicy.SECURITY_HEADERS;
+    // Zero minimum/default TTL preserves document revalidation. A positive
+    // maximum allows compression negotiation without the managed disabled
+    // policy's Accept-Encoding exclusions; S3 no-cache still forces revalidation.
+    const documentCachePolicy = new CachePolicy(this, 'DocumentCachePolicy', {
+      minTtl: Duration.seconds(0),
+      defaultTtl: Duration.seconds(0),
+      maxTtl: Duration.days(1),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+    });
     this.distribution = new Distribution(this, 'Distribution', {
       certificate,
       domainNames: props.customDomain
@@ -113,7 +123,8 @@ export class FrontendHosting extends Construct {
         // a refresh must obtain the current document and its matching chunks.
         // The viewer-request function still runs before origin access, so dev
         // Basic Auth is enforced for every document response.
-        cachePolicy: CachePolicy.CACHING_DISABLED,
+        cachePolicy: documentCachePolicy,
+        compress: true,
         responseHeadersPolicy,
         functionAssociations: [
           { eventType: FunctionEventType.VIEWER_REQUEST, function: spaRewrite },
@@ -204,6 +215,10 @@ export class FrontendHosting extends Construct {
       // finish a lazy route transition after a deployment. Content-addressed
       // asset URLs make CloudFront invalidation unnecessary for normal deploys.
       prune: false,
+      // The infrastructure uploader must not erase HTML/fixture revalidation
+      // metadata. The frontend-only uploader additionally gives hashed chunks
+      // immutable caching, after publishing assets before documents.
+      cacheControl: [CacheControl.fromString('no-cache, max-age=0, must-revalidate')],
     });
     // The CLI already transfers files concurrently. Give it enough memory/CPU
     // without changing BucketDeployment's singleton UUID or ServiceToken:

@@ -346,3 +346,23 @@ secrets from all four repositories, and revoke dev-only deployment-role trust. K
 settings and AWS deletion require live authenticated access; do not infer completion
 from changed source files. Local `ng serve` and local API/processor workflows remain
 available. Private/noindex behaviour in local development remains intentional.
+
+## Frontend technical SEO release contract
+
+`deploy-all` runs the frontend's full HTML/browser gate once, rechecks the sealed
+source/artifact before CDK, and runs its production audit after deployment.
+Both application workflows remain manually dispatched. Reports are retained as
+workflow artifacts; a failed/incomplete gate must not upload a new frontend.
+Infrastructure-only deployment restores existing application artifacts and does
+not certify them as a newly checked frontend release.
+
+The document cache policy has zero minimum/default TTL and enables gzip/Brotli
+negotiation. A one-day maximum permits compression; origin no-cache still forces
+revalidation. The existing bucket uploader applies explicit revalidation to
+all artifacts. The frontend-only uploader additionally caches hashed chunks as
+immutable and publishes them before HTML while retaining historical chunks.
+No new paid service, log, WAF rule or invalidation is introduced. The cache
+policy itself has no fixed charge; compression may reduce transfer. Conservative
+infrastructure-upload revalidation can increase conditional asset requests;
+normal S3/CloudFront, deployment and artifact-retention charges still apply.
+Authorize deployment separately and verify actual headers/bytes after release.

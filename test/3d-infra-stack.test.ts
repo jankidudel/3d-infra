@@ -523,7 +523,8 @@ void test('revalidates frontend documents while caching immutable assets', () =>
     DistributionConfig: Match.objectLike({
       DefaultRootObject: 'index.html',
       DefaultCacheBehavior: Match.objectLike({
-        CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+        CachePolicyId: Match.anyValue(),
+        Compress: true,
         FunctionAssociations: [
           Match.objectLike({ EventType: 'viewer-request', FunctionARN: Match.anyValue() }),
         ],
@@ -538,7 +539,22 @@ void test('revalidates frontend documents while caching immutable assets', () =>
   result.hasResourceProperties('AWS::CloudFront::Function', {
     FunctionCode: Match.anyValue(),
   });
-  result.resourceCountIs('AWS::CloudFront::CachePolicy', 0);
+  result.resourceCountIs('AWS::CloudFront::CachePolicy', 1);
+  result.hasResourceProperties('AWS::CloudFront::CachePolicy', {
+    CachePolicyConfig: Match.objectLike({
+      MinTTL: 0,
+      DefaultTTL: 0,
+      MaxTTL: 86400,
+      ParametersInCacheKeyAndForwardedToOrigin: Match.objectLike({
+        EnableAcceptEncodingGzip: true,
+        EnableAcceptEncodingBrotli: true,
+      }),
+    }),
+  });
+  result.hasResourceProperties('Custom::CDKBucketDeployment', {
+    SystemMetadata: Match.objectLike({ 'cache-control': 'no-cache, max-age=0, must-revalidate' }),
+    Prune: false,
+  });
   result.hasOutput('FrontendDistributionId', {});
   result.hasOutput('FrontendUrl', {});
 });
