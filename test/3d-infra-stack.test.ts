@@ -523,15 +523,23 @@ void test('revalidates frontend documents while caching immutable assets', () =>
     DistributionConfig: Match.objectLike({
       DefaultRootObject: 'index.html',
       DefaultCacheBehavior: Match.objectLike({
-        CachePolicyId: Match.anyValue(),
+        CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
         Compress: true,
         FunctionAssociations: [
           Match.objectLike({ EventType: 'viewer-request', FunctionARN: Match.anyValue() }),
         ],
       }),
       CacheBehaviors: Match.arrayWith([
-        Match.objectLike({ PathPattern: '*.js', ViewerProtocolPolicy: 'redirect-to-https' }),
-        Match.objectLike({ PathPattern: '*.css', ViewerProtocolPolicy: 'redirect-to-https' }),
+        Match.objectLike({
+          PathPattern: '*.js',
+          ViewerProtocolPolicy: 'redirect-to-https',
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+        }),
+        Match.objectLike({
+          PathPattern: '*.css',
+          ViewerProtocolPolicy: 'redirect-to-https',
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+        }),
         Match.objectLike({ PathPattern: 'api/*', ViewerProtocolPolicy: 'https-only' }),
       ]),
     }),
@@ -539,24 +547,26 @@ void test('revalidates frontend documents while caching immutable assets', () =>
   result.hasResourceProperties('AWS::CloudFront::Function', {
     FunctionCode: Match.anyValue(),
   });
-  result.resourceCountIs('AWS::CloudFront::CachePolicy', 1);
-  result.hasResourceProperties('AWS::CloudFront::CachePolicy', {
-    CachePolicyConfig: Match.objectLike({
-      MinTTL: 0,
-      DefaultTTL: 0,
-      MaxTTL: 86400,
-      ParametersInCacheKeyAndForwardedToOrigin: Match.objectLike({
-        EnableAcceptEncodingGzip: true,
-        EnableAcceptEncodingBrotli: true,
-      }),
-    }),
-  });
   result.hasResourceProperties('Custom::CDKBucketDeployment', {
     SystemMetadata: Match.objectLike({ 'cache-control': 'no-cache, max-age=0, must-revalidate' }),
     Prune: false,
   });
   result.hasOutput('FrontendDistributionId', {});
   result.hasOutput('FrontendUrl', {});
+});
+
+void test('uses managed document caching without custom cache policies in both stages for the Free plan', () => {
+  for (const stage of [stages.development, stages.production]) {
+    const result = template(stage);
+    result.resourceCountIs('AWS::CloudFront::CachePolicy', 0);
+    result.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        DefaultCacheBehavior: Match.objectLike({
+          CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+        }),
+      }),
+    });
+  }
 });
 
 void test('gives the existing frontend upload helper more CPU without replacing its service token', () => {

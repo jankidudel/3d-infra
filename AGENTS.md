@@ -14,6 +14,12 @@ Before completing implementation work, run:
 
     npm run precommit
 
+## Preserve working cache policies
+
+- Do not change CloudFront cache policies, cache behaviors, TTLs, compression settings, S3 Cache-Control metadata, or the CloudFront pricing plan unless the user explicitly requests that specific caching change.
+- SEO audits, performance findings, general implementation requests, and deployment requests do not authorize cache-policy changes. Report findings without modifying the working configuration.
+- Preserve managed `CachingDisabled` for frontend documents and API requests, and managed `CachingOptimized` for JavaScript and CSS. The production CloudFront Free plan does not support custom cache policies; do not add them or upgrade the plan to bypass this restriction.
+
 ## CloudWatch alarms
 
 - Keep this stack at no more than 10 CloudWatch alarms. Before adding an alarm,

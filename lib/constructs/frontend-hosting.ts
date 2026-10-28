@@ -90,16 +90,6 @@ export class FrontendHosting extends Construct {
     const frontendOrigin = S3BucketOrigin.withOriginAccessControl(this.bucket);
     // Use AWS's managed policy so the distribution needs no custom policy resource.
     const responseHeadersPolicy = ResponseHeadersPolicy.SECURITY_HEADERS;
-    // Zero minimum/default TTL preserves document revalidation. A positive
-    // maximum allows compression negotiation without the managed disabled
-    // policy's Accept-Encoding exclusions; S3 no-cache still forces revalidation.
-    const documentCachePolicy = new CachePolicy(this, 'DocumentCachePolicy', {
-      minTtl: Duration.seconds(0),
-      defaultTtl: Duration.seconds(0),
-      maxTtl: Duration.days(1),
-      enableAcceptEncodingGzip: true,
-      enableAcceptEncodingBrotli: true,
-    });
     this.distribution = new Distribution(this, 'Distribution', {
       certificate,
       domainNames: props.customDomain
@@ -123,7 +113,9 @@ export class FrontendHosting extends Construct {
         // a refresh must obtain the current document and its matching chunks.
         // The viewer-request function still runs before origin access, so dev
         // Basic Auth is enforced for every document response.
-        cachePolicy: documentCachePolicy,
+        // CloudFront's Free plan rejects custom cache policies. This managed
+        // policy preserves document freshness, but does not negotiate compression.
+        cachePolicy: CachePolicy.CACHING_DISABLED,
         compress: true,
         responseHeadersPolicy,
         functionAssociations: [

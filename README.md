@@ -356,13 +356,14 @@ workflow artifacts; a failed/incomplete gate must not upload a new frontend.
 Infrastructure-only deployment restores existing application artifacts and does
 not certify them as a newly checked frontend release.
 
-The document cache policy has zero minimum/default TTL and enables gzip/Brotli
-negotiation. A one-day maximum permits compression; origin no-cache still forces
-revalidation. The existing bucket uploader applies explicit revalidation to
+Documents use AWS's managed `CachingDisabled` policy because the CloudFront Free
+plan rejects custom cache policies. This keeps documents fresh but does not
+negotiate gzip/Brotli for HTML; live compression findings remain advisory.
+JavaScript and CSS keep the managed `CachingOptimized` policy.
+The existing bucket uploader applies explicit revalidation to
 all artifacts. The frontend-only uploader additionally caches hashed chunks as
 immutable and publishes them before HTML while retaining historical chunks.
-No new paid service, log, WAF rule or invalidation is introduced. The cache
-policy itself has no fixed charge; compression may reduce transfer. Conservative
+No new paid service, pricing-plan change, log, WAF rule or invalidation is introduced. Conservative
 infrastructure-upload revalidation can increase conditional asset requests;
 normal S3/CloudFront, deployment and artifact-retention charges still apply.
 Authorize deployment separately and verify actual headers/bytes after release.
