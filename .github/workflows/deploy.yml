@@ -40,6 +40,7 @@ jobs:
   deploy:
     name: Deploy prod
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     environment: prod
     env:
       AWS_REGION: us-east-1
@@ -53,6 +54,12 @@ jobs:
       GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
       TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
     steps:
+      - name: Report runner startup
+        run: |
+          echo "Deployment runner started at $(date -u +%FT%TZ) for $GITHUB_SHA."
+          echo "Runner: $RUNNER_OS / $RUNNER_ARCH. Application checks run before AWS deployment."
+          echo "Runner started at $(date -u +%FT%TZ)." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check out infrastructure
         uses: actions/checkout@v6
         with:
@@ -151,36 +158,40 @@ jobs:
         working-directory: 3d-processor
         run: dotnet test 3d-processor.slnx --nologo
 
-      - name: Verify API
-        working-directory: 3d-api
-        run: make check
-
       - name: Check browser audit environment
         run: google-chrome --version
 
-      - name: Verify frontend
-        working-directory: 3d-frontend
-        run: npm run verify
-
-      # Reuse the production frontend built and checked by verify.
-      - name: Build backend deployment artifacts
+      # API package depends on its checks. Do not run make check a second time.
+      - name: Verify API and package backend artifacts
         working-directory: 3d-infra
         run: make backend-artifacts
 
-      - name: Show non-secret OIDC claims
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const token = await core.getIDToken('sts.amazonaws.com');
-            const encodedPayload = token.split('.')[1];
-            const claims = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
-            core.info(JSON.stringify({
-              iss: claims.iss,
-              aud: claims.aud,
-              sub: claims.sub,
-              repository: claims.repository,
-              environment: claims.environment,
-            }, null, 2));
+      - name: Generate frontend content once
+        working-directory: 3d-frontend
+        run: npm run verify:prepare
+
+      - name: Check frontend source
+        working-directory: 3d-frontend
+        run: npm run verify:source
+
+      - name: Test frontend
+        working-directory: 3d-frontend
+        timeout-minutes: 15
+        run: npm run verify:tests
+
+      - name: Build and audit frontend HTML
+        working-directory: 3d-frontend
+        timeout-minutes: 10
+        run: npm run verify:build
+
+      - name: Audit rendered frontend pages
+        working-directory: 3d-frontend
+        timeout-minutes: 15
+        run: npm run seo:render
+
+      - name: Seal verified frontend artifact
+        working-directory: 3d-frontend
+        run: npm run seo:artifact:seal
 
       - name: Configure temporary AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -194,13 +205,18 @@ jobs:
         working-directory: 3d-frontend
         run: npm run seo:artifact
 
-      - name: Show CloudFormation changes
+      - name: Synthesize deployment once
         working-directory: 3d-infra
         run: |
           PROCESSOR_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-processor/artifacts/3d-processor.zip" \
           API_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-api/artifacts/3d-api.zip" \
           FRONTEND_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-frontend/dist/3d-frontend/browser" \
-          npx cdk diff -c stage="$STAGE"
+          npx cdk synth --app "node dist/bin/3d-infra.js" -c stage="$STAGE" --quiet
+
+      - name: Show CloudFormation changes
+        working-directory: 3d-infra
+        # Template diff only; exact replacement decisions are made by the deployment change set.
+        run: npx cdk diff --app cdk.out --change-set=false
 
       - name: Deploy with CDK
         env:
@@ -220,10 +236,7 @@ jobs:
           if [ "$STAGE" = "prod" ]; then
             PARAMETERS+=(--parameters "TurnstileSecret=$TURNSTILE_SECRET")
           fi
-          PROCESSOR_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-processor/artifacts/3d-processor.zip" \
-          API_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-api/artifacts/3d-api.zip" \
-          FRONTEND_ARTIFACT_PATH="$GITHUB_WORKSPACE/3d-frontend/dist/3d-frontend/browser" \
-          npx ts-node bin/deploy-with-progress.ts -c stage="$STAGE" --require-approval never \
+          node dist/bin/deploy-with-progress.js --app cdk.out --require-approval never \
           "${PARAMETERS[@]}" --outputs-file cdk-outputs.json
 
       - name: Report production DNS and deployment details
@@ -250,3 +263,15 @@ jobs:
         with:
           name: technical-seo-prod
           path: 3d-frontend/tmp/seo
+
+      - name: Report deployment result
+        if: always()
+        env:
+          DEPLOY_RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "### Production deployment: $DEPLOY_RESULT"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Frontend source, tests, HTML, browser rendering and artifact sealing appear as separate steps."
+            echo "If live logs stop updating, refresh the page or use the job menu to view raw logs."
+          } >> "$GITHUB_STEP_SUMMARY"

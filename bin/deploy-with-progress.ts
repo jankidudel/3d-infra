@@ -114,7 +114,7 @@ async function reportProgress(startedAt: number): Promise<void> {
     console.log(
       '::warning::Deployment has been running for at least 10 minutes. Check the latest AWS events; elapsed time alone does not prove a failure. Cancelling GitHub does not stop AWS.',
     );
-    // Locate the legacy uploader during the one-time migration away from CDK uploads.
+    // Locate the existing CDK uploader if frontend publication is slow.
     const helpers = await diagnosticRead('describe-stack-resources', [
       '--query',
       "StackResources[?ResourceType=='AWS::Lambda::Function' && starts_with(LogicalResourceId, 'CustomCDKBucketDeployment')].PhysicalResourceId",
@@ -127,7 +127,7 @@ async function reportProgress(startedAt: number): Promise<void> {
         if (Array.isArray(names)) {
           for (const name of names) {
             if (typeof name === 'string' && /^[A-Za-z0-9_-]+$/.test(name)) {
-              console.log(`Legacy frontend upload helper logs: /aws/lambda/${name}`);
+              console.log(`Frontend upload helper logs: /aws/lambda/${name}`);
             }
           }
         }

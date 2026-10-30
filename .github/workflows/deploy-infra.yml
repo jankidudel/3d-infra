@@ -27,6 +27,7 @@ jobs:
   deploy:
     name: Deploy infrastructure to prod
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     environment: prod
     env:
       AWS_REGION: us-east-1
@@ -39,6 +40,12 @@ jobs:
       CORS_ORIGIN: ${{ vars.CORS_ORIGIN }}
       GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
     steps:
+      - name: Report runner startup
+        run: |
+          echo "Deployment runner started at $(date -u +%FT%TZ) for $GITHUB_SHA."
+          echo "Runner: $RUNNER_OS / $RUNNER_ARCH. Application checks run before AWS deployment."
+          echo "Runner started at $(date -u +%FT%TZ)." >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v6
 
       - name: Verify AWS deployment configuration
@@ -89,12 +96,16 @@ jobs:
           curl --fail --location --retry 3 "$(aws lambda get-function --function-name "3d-processor-$STAGE" --query 'Code.Location' --output text)" --output "$RUNNER_TEMP/application-artifacts/3d-processor.zip"
           aws s3 sync "s3://$FRONTEND_BUCKET" "$RUNNER_TEMP/application-artifacts/frontend"
 
-      - name: Show CloudFormation changes
+      - name: Synthesize deployment once
         run: |
           PROCESSOR_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-processor.zip" \
           API_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-api.zip" \
           FRONTEND_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/frontend" \
-          npx cdk diff -c stage="$STAGE"
+          npx cdk synth --app "node dist/bin/3d-infra.js" -c stage="$STAGE" --quiet
+
+      - name: Show CloudFormation changes
+        # Template diff only; exact replacement decisions are made by the deployment change set.
+        run: npx cdk diff --app cdk.out --change-set=false
 
       - name: Deploy infrastructure configuration
         env:
@@ -113,8 +124,17 @@ jobs:
           if [ "$STAGE" = "prod" ]; then
             PARAMETERS+=(--parameters "TurnstileSecret=$TURNSTILE_SECRET")
           fi
-          PROCESSOR_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-processor.zip" \
-          API_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/3d-api.zip" \
-          FRONTEND_ARTIFACT_PATH="$RUNNER_TEMP/application-artifacts/frontend" \
-          npx ts-node bin/deploy-with-progress.ts -c stage="$STAGE" --require-approval never \
+          node dist/bin/deploy-with-progress.js --app cdk.out --require-approval never \
           "${PARAMETERS[@]}" --outputs-file cdk-outputs.json
+
+      - name: Report deployment result
+        if: always()
+        env:
+          DEPLOY_RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "### Production deployment: $DEPLOY_RESULT"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Validation, synthesis, diff and deployment appear as separate steps."
+            echo "If live logs stop updating, refresh the page or use the job menu to view raw logs."
+          } >> "$GITHUB_STEP_SUMMARY"

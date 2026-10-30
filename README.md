@@ -367,3 +367,39 @@ No new paid service, pricing-plan change, log, WAF rule or invalidation is intro
 infrastructure-upload revalidation can increase conditional asset requests;
 normal S3/CloudFront, deployment and artifact-retention charges still apply.
 Authorize deployment separately and verify actual headers/bytes after release.
+
+### Deployment progress and repeated work
+
+The manual production workflow reports runner startup, checks frontend source, runs
+application and script tests, builds/audits HTML, checks browser rendering and seals
+the release as separate steps. Each has visible output; frontend tests, build and
+browser audit have their own time limits. If the GitHub live viewer stops updating,
+use the job menu's **View raw logs** or **Download log archive** before cancelling.
+A stale spinner is not evidence that the runner stopped. Cancellation before the
+CDK deployment step does not publish applications.
+
+Frontend guides are generated once in `verify:prepare`; all script specs run in one
+Vitest invocation. The HTML audit includes route coverage and internal-link checks,
+so the deployment does not repeat those standalone audits. Both frontend workflows
+use the same ordered verification phases as `npm run verify`; pushing alone still
+does not run a deployment or require Chrome locally.
+
+`make backend-artifacts` checks and packages the API once (`package` depends on
+`check`) and packages the already-tested processor. Debug processor tests and its
+Release Lambda package serve different purposes and are retained. Infrastructure
+`npm test` type-checks/compiles all source before testing, so `precommit` does not
+run a second TypeScript compilation. Its fixture synthesis remains a separate
+validation of the infrastructure configuration.
+
+After validation, the workflow synthesizes the real cloud assembly once. The
+template diff and deployment both consume `cdk.out`; the diff does not create a
+throwaway change set or publish assets. Replacement decisions come from the actual
+deployment change set. CDK still uploads frontend content through its existing
+BucketDeployment; the frontend-only workflow still uses its existing S3 uploader.
+Neither path changes cache policies, object metadata or invalidation settings.
+
+For frontend changes, the frontend-only workflow avoids building/deploying the
+backends. Use one production deployment entry point at a time: GitHub concurrency
+groups are scoped to a repository and cannot lock a deployment in another repo.
+The staged frontend scripts require the updated frontend revision; use matching
+current component refs when applying this workflow update.

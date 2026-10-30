@@ -62,7 +62,7 @@ setTimeout(() => process.exit(Number(process.env.CDK_EXIT ?? 0)), Number(process
       result = {
         ...(await runFile(
           process.execPath,
-          [runner, '-c', 'stage=prod', '--parameters', 'RateLimitSecret=secret-must-not-leak'],
+          [runner, '--app', 'cdk.out', '--parameters', 'RateLimitSecret=secret-must-not-leak'],
           { env, timeout: 10_000 },
         )),
         code: 0,
@@ -94,8 +94,8 @@ void test('prints independent AWS status while CDK is quiet and preserves deploy
     'deploy',
     '--progress',
     'events',
-    '-c',
-    'stage=prod',
+    '--app',
+    'cdk.out',
     '--parameters',
     'RateLimitSecret=secret-must-not-leak',
   ]);
@@ -153,7 +153,7 @@ void test('both production infrastructure workflows share a non-cancelling queue
   for (const file of ['deploy.yml', 'deploy-infra.yml']) {
     const workflow = await readFile(`.github/workflows/${file}`, 'utf8');
     assert.match(workflow, /group: infrastructure\n\s+cancel-in-progress: false\n\s+queue: max/);
-    assert.match(workflow, /npx ts-node bin\/deploy-with-progress.ts/);
+    assert.match(workflow, /node dist\/bin\/deploy-with-progress.js/);
     assert.doesNotMatch(workflow, /npx cdk deploy/);
     assert.match(workflow, /environment: prod/);
     assert.match(workflow, /STAGE: prod/);
