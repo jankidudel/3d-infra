@@ -158,8 +158,10 @@ jobs:
         working-directory: 3d-processor
         run: dotnet test 3d-processor.slnx --nologo
 
-      - name: Check browser audit environment
-        run: google-chrome --version
+      - name: Install Chrome Headless Shell for the render audit
+        working-directory: 3d-frontend
+        timeout-minutes: 5
+        run: bash .github/scripts/install-audit-browser.sh
 
       # API package depends on its checks. Do not run make check a second time.
       - name: Verify API and package backend artifacts
