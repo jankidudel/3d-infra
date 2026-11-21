@@ -249,12 +249,6 @@ jobs:
           echo "CloudFormation outputs:"
           cat cdk-outputs.json
 
-      - name: Remove retired tool documents
-        working-directory: 3d-frontend
-        run: |
-          FRONTEND_BUCKET="$(aws cloudformation describe-stacks --stack-name "three-d-infra-$STAGE" --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)"
-          node --experimental-strip-types scripts/retire-tool-documents.mts dist/3d-frontend/browser "$FRONTEND_BUCKET"
-
       - name: Verify production frontend delivery
         working-directory: 3d-frontend
         run: npm run seo:live
