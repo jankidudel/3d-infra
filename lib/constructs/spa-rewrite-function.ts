@@ -33,9 +33,18 @@ function productionRequestHandler(
   canonicalUrl: string,
 ): CloudFrontRequest | Record<string, unknown> {
   var request = event.request;
-  if (request.headers.host.value === apexDomain) {
+  var uri = request.uri;
+  var isApexHost = request.headers.host.value === apexDomain;
+  // One canonical URL per page: /guides/ redirects to /guides. The apex
+  // redirect strips the slash in the same hop, so no request chains redirects.
+  var hasTrailingSlash = uri.length > 1 && uri.endsWith('/') && uri.indexOf('/api/') !== 0;
+  if (isApexHost || hasTrailingSlash) {
+    var path = uri;
+    while (path.length > 1 && path.endsWith('/')) {
+      path = path.slice(0, -1);
+    }
     var rawQueryString = request.rawQueryString!();
-    var location = canonicalUrl + request.uri;
+    var location = canonicalUrl + path;
     if (rawQueryString) {
       location += '?' + rawQueryString;
     }
@@ -45,16 +54,12 @@ function productionRequestHandler(
       headers: { location: { value: location } },
     };
   }
-  var uri = request.uri;
   if (uri.indexOf('/api/') === 0 || uri.includes('.')) {
     return request;
   }
   if (uri === '/') {
     request.uri = '/index.html';
     return request;
-  }
-  if (uri.endsWith('/')) {
-    uri = uri.slice(0, -1);
   }
   request.uri = uri + '/index.html';
   return request;

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { InfraStack } from '../lib/3d-infra-stack';
+import { IMMUTABLE_FRONTEND_ASSET_PATTERNS } from '../lib/constructs/frontend-hosting';
 import { productionDomain } from '../lib/production-domain';
 import { stages, type Stage } from '../lib/stages';
 
@@ -522,6 +523,7 @@ void test('revalidates frontend documents while caching immutable assets', () =>
   result.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: Match.objectLike({
       DefaultRootObject: 'index.html',
+      HttpVersion: 'http2and3',
       DefaultCacheBehavior: Match.objectLike({
         CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
         Compress: true,
@@ -550,7 +552,26 @@ void test('revalidates frontend documents while caching immutable assets', () =>
   result.hasResourceProperties('Custom::CDKBucketDeployment', {
     SystemMetadata: Match.objectLike({ 'cache-control': 'no-cache, max-age=0, must-revalidate' }),
     Prune: false,
+    Exclude: [...IMMUTABLE_FRONTEND_ASSET_PATTERNS],
   });
+  result.hasResourceProperties('Custom::CDKBucketDeployment', {
+    SystemMetadata: Match.objectLike({ 'cache-control': 'public, max-age=31536000, immutable' }),
+    Prune: false,
+    Exclude: ['*'],
+    Include: [...IMMUTABLE_FRONTEND_ASSET_PATTERNS],
+  });
+  const deployments = result.findResources('Custom::CDKBucketDeployment');
+  const documents = Object.entries(deployments).find(([, resource]) =>
+    JSON.stringify(resource).includes('no-cache, max-age=0, must-revalidate'),
+  );
+  const immutable = Object.keys(deployments).find((id) => id !== documents?.[0]);
+  assert.ok(documents && immutable);
+  assert.ok(
+    ([] as string[])
+      .concat((documents[1] as { readonly DependsOn?: string | string[] }).DependsOn ?? [])
+      .includes(immutable),
+    'documents must publish after the hashed assets they reference',
+  );
   result.hasOutput('FrontendDistributionId', {});
   result.hasOutput('FrontendUrl', {});
 });
@@ -577,7 +598,7 @@ void test('gives the existing frontend upload helper more CPU without replacing 
       Properties: Match.objectLike({ MemorySize: 256, Timeout: 900 }),
     });
     assert.deepEqual(Object.keys(uploaders), [uploaderId]);
-    result.resourceCountIs('Custom::CDKBucketDeployment', 1);
+    result.resourceCountIs('Custom::CDKBucketDeployment', 2);
     result.hasResourceProperties('Custom::CDKBucketDeployment', {
       ServiceToken: { 'Fn::GetAtt': [uploaderId, 'Arn'] },
       Prune: false,

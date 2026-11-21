@@ -4,6 +4,7 @@ import {
   AllowedMethods,
   CachePolicy,
   Distribution,
+  HttpVersion,
   ResponseHeadersPolicy,
   ViewerProtocolPolicy,
   Function as CfFunction,
@@ -32,6 +33,23 @@ import { stages } from '../stages';
 import { basicAuthSpaRewriteFunctionCode, spaRewriteFunctionCode } from './spa-rewrite-function';
 
 const FRONTEND_UPLOAD_MEMORY_MB = 256;
+const MUTABLE_CACHE_CONTROL = 'no-cache, max-age=0, must-revalidate';
+const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+/**
+ * Angular's content-hashed build outputs. Keep identical to is_hashed_asset in
+ * 3d-frontend/.github/scripts/deploy-frontend.sh. Hand-named public files
+ * (logos, example SVGs) are deliberately excluded so edits are not cached.
+ */
+export const IMMUTABLE_FRONTEND_ASSET_PATTERNS = [
+  'chunk-*.js',
+  'main-*.js',
+  'main.*.js',
+  'polyfills-*.js',
+  'worker-*.js',
+  'styles-*.css',
+  'styles.*.css',
+  'media/*',
+] as const;
 
 export interface FrontendHostingProps {
   readonly stage: string;
@@ -96,6 +114,8 @@ export class FrontendHosting extends Construct {
         ? [props.customDomain.canonicalDomain, props.customDomain.apexDomain]
         : undefined,
       webAclId: props.webAclArn,
+      // HTTP/3 is included in every CloudFront pricing plan at no extra cost.
+      httpVersion: HttpVersion.HTTP2_AND_3,
       defaultRootObject: 'index.html',
       errorResponses: [
         {
@@ -200,18 +220,33 @@ export class FrontendHosting extends Construct {
         ],
       });
     }
+    const source = Source.asset(props.artifactPath);
+    // Content-hashed chunks never change under the same name, so browsers may
+    // keep them for a year. Open tabs keep working after a deployment because
+    // old chunk names are retained (prune: false), not because of revalidation.
+    const immutableAssets = new BucketDeployment(this, 'ImmutableAssetDeployment', {
+      destinationBucket: this.bucket,
+      sources: [source],
+      prune: false,
+      exclude: ['*'],
+      include: [...IMMUTABLE_FRONTEND_ASSET_PATTERNS],
+      cacheControl: [CacheControl.fromString(IMMUTABLE_CACHE_CONTROL)],
+    });
     const deployment = new BucketDeployment(this, 'Deployment', {
       destinationBucket: this.bucket,
-      sources: [Source.asset(props.artifactPath)],
+      sources: [source],
       // Retain prior content-hashed chunks so an already-open browser tab can
       // finish a lazy route transition after a deployment. Content-addressed
       // asset URLs make CloudFront invalidation unnecessary for normal deploys.
       prune: false,
-      // The infrastructure uploader must not erase HTML/fixture revalidation
-      // metadata. The frontend-only uploader additionally gives hashed chunks
-      // immutable caching, after publishing assets before documents.
-      cacheControl: [CacheControl.fromString('no-cache, max-age=0, must-revalidate')],
+      // Documents, fixtures and hand-named public files revalidate. Hashed
+      // assets are published first by ImmutableAssetDeployment and are not
+      // re-uploaded here, so their immutable metadata is never overwritten.
+      exclude: [...IMMUTABLE_FRONTEND_ASSET_PATTERNS],
+      cacheControl: [CacheControl.fromString(MUTABLE_CACHE_CONTROL)],
     });
+    // Publish every referenced chunk before the documents that reference it.
+    deployment.node.addDependency(immutableAssets);
     // The CLI already transfers files concurrently. Give it enough memory/CPU
     // without changing BucketDeployment's singleton UUID or ServiceToken:
     // the memoryLimit prop would select a different singleton for an existing stack.

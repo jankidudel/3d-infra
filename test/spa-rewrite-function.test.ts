@@ -132,3 +132,43 @@ void test('rewrites authenticated dev requests after their credentials are accep
   const result = authenticatedHandler()({ request: authenticated }) as CloudFrontRequest;
   assert.equal(result.uri, '/stl-tools/index.html');
 });
+
+void test('redirects a canonical trailing-slash route to its slashless canonical URL', () => {
+  const result = handler()({
+    request: request(productionDomain.canonicalDomain, '/guides/', 'source=test'),
+  }) as {
+    readonly statusCode: number;
+    readonly headers: { readonly location: { readonly value: string } };
+  };
+  assert.equal(result.statusCode, 301);
+  assert.equal(result.headers.location.value, 'https://www.inspectmesh.com/guides?source=test');
+});
+
+void test('collapses repeated trailing slashes in one redirect', () => {
+  const result = handler()({
+    request: request(productionDomain.canonicalDomain, '/tools/stl-viewer//'),
+  }) as { readonly headers: { readonly location: { readonly value: string } } };
+  assert.equal(result.headers.location.value, 'https://www.inspectmesh.com/tools/stl-viewer');
+});
+
+void test('strips the apex trailing slash in the same redirect hop', () => {
+  assert.equal(locationFor('/guides/'), 'https://www.inspectmesh.com/guides');
+});
+
+void test('serves the canonical root without redirecting it', () => {
+  const root = request(productionDomain.canonicalDomain, '/');
+  assert.equal(handler()({ request: root }), root);
+  assert.equal(root.uri, '/index.html');
+});
+
+void test('does not redirect API paths that end with a slash', () => {
+  const api = request(productionDomain.canonicalDomain, '/api/jobs/');
+  assert.equal(handler()({ request: api }), api);
+  assert.equal(api.uri, '/api/jobs/');
+});
+
+void test('keeps query strings on canonical routes without redirecting them', () => {
+  const tracked = request(productionDomain.canonicalDomain, '/guides', 'utm_source=newsletter');
+  assert.equal(handler()({ request: tracked }), tracked);
+  assert.equal(tracked.uri, '/guides/index.html');
+});
