@@ -180,6 +180,9 @@ export function legacyRedirectTarget(path: string): string | undefined {
   if (legacyRootGuideSlugs.includes(slug)) {
     return '/guides/' + slug;
   }
+  if (path.includes('.')) {
+    return undefined;
+  }
   for (const [from, to] of Object.entries(legacySectionRedirects)) {
     if (path === from || path.startsWith(from + '/')) {
       return to + path.slice(from.length);

@@ -78,7 +78,10 @@ function productionRequestHandler(
       path = '/tools/' + slug;
     } else if (isRootSlug && legacy.guides.indexOf('|' + slug + '|') !== -1) {
       path = '/guides/' + slug;
-    } else {
+    } else if (path.indexOf('.') === -1) {
+      // Section moves apply to clean page URLs only. File-style URLs such as
+      // /3d-printing-materials/pla.html fall through to the origin and 404,
+      // like the .html forms of retired tools and guides.
       var sections = Object.keys(legacy.sections);
       for (var index = 0; index < sections.length; index++) {
         var from = sections[index]!;

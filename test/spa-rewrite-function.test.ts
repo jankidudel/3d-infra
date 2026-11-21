@@ -331,3 +331,11 @@ void test('keeps tool and guide slug lists disjoint and free of current top-leve
     );
   }
 });
+
+void test('leaves .html object forms of every retired URL to 404 at the origin', () => {
+  for (const legacyPath of legacyPaths) {
+    const htmlObject = request(productionDomain.canonicalDomain, legacyPath + '.html');
+    assert.equal(handler()({ request: htmlObject }), htmlObject, legacyPath + '.html');
+    assert.equal(htmlObject.uri, legacyPath + '.html');
+  }
+});
