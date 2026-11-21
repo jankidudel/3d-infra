@@ -2,7 +2,13 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import {
+  legacyRedirectTarget,
+  legacyRootGuideSlugs,
+  legacyRootToolSlugs,
+} from '../lib/constructs/legacy-redirects';
+import {
   basicAuthSpaRewriteFunctionCode,
+  CLOUDFRONT_FUNCTION_MAX_BYTES,
   spaRewriteFunctionCode,
 } from '../lib/constructs/spa-rewrite-function';
 import { productionDomain } from '../lib/production-domain';
@@ -171,4 +177,157 @@ void test('keeps query strings on canonical routes without redirecting them', ()
   const tracked = request(productionDomain.canonicalDomain, '/guides', 'utm_source=newsletter');
   assert.equal(handler()({ request: tracked }), tracked);
   assert.equal(tracked.uri, '/guides/index.html');
+});
+
+function redirectFor(host: string, uri: string, rawQueryString?: string) {
+  return handler()({ request: request(host, uri, rawQueryString) }) as {
+    readonly statusCode: number;
+    readonly headers: { readonly location: { readonly value: string } };
+  };
+}
+
+const materialSlugs = [
+  'pla',
+  'petg',
+  'abs',
+  'asa',
+  'tpu',
+  'nylon',
+  'polycarbonate',
+  'polypropylene',
+];
+const legacyPaths = [
+  ...legacyRootToolSlugs.map((slug) => '/' + slug),
+  ...legacyRootGuideSlugs.map((slug) => '/' + slug),
+  '/3d-printing-materials',
+  ...materialSlugs.map((slug) => '/3d-printing-materials/' + slug),
+];
+
+void test('redirects every retired URL to its current page in one hop', () => {
+  assert.equal(legacyRootToolSlugs.length, 49);
+  assert.equal(legacyRootGuideSlugs.length, 101);
+  for (const legacyPath of legacyPaths) {
+    const currentPath = legacyRedirectTarget(legacyPath);
+    assert.ok(currentPath, legacyPath);
+    const result = redirectFor(productionDomain.canonicalDomain, legacyPath);
+    assert.equal(result.statusCode, 301);
+    assert.equal(result.headers.location.value, `https://www.inspectmesh.com${currentPath}`);
+    const target = request(productionDomain.canonicalDomain, currentPath);
+    assert.equal(handler()({ request: target }), target);
+  }
+});
+
+void test('redirects a retired URL from the apex host with a trailing slash and query in one hop', () => {
+  const result = redirectFor(productionDomain.apexDomain, '/stl-viewer/', 'source=old');
+  assert.equal(
+    result.headers.location.value,
+    'https://www.inspectmesh.com/tools/stl-viewer?source=old',
+  );
+});
+
+void test('leaves the .html object form of a retired URL to 404 at the origin', () => {
+  const htmlObject = request(productionDomain.canonicalDomain, '/stl-viewer.html');
+  assert.equal(handler()({ request: htmlObject }), htmlObject);
+  assert.equal(htmlObject.uri, '/stl-viewer.html');
+});
+
+void test('redirects index.html document variants to their clean canonical URL', () => {
+  const cases: [string, string][] = [
+    ['/index.html', 'https://www.inspectmesh.com/'],
+    ['/index.csr.html', 'https://www.inspectmesh.com/'],
+    ['/guides/index.html', 'https://www.inspectmesh.com/guides'],
+    [
+      '/guides/how-to-check-stl-for-errors/index.html',
+      'https://www.inspectmesh.com/guides/how-to-check-stl-for-errors',
+    ],
+  ];
+  for (const [uri, location] of cases) {
+    const result = redirectFor(productionDomain.canonicalDomain, uri);
+    assert.equal(result.statusCode, 301);
+    assert.equal(result.headers.location.value, location);
+  }
+});
+
+void test('redirects the default CloudFront hostname to the canonical hostname', () => {
+  const result = redirectFor('d111111abcdef8.cloudfront.net', '/guides', 'a=1');
+  assert.equal(result.statusCode, 301);
+  assert.equal(result.headers.location.value, 'https://www.inspectmesh.com/guides?a=1');
+});
+
+void test('serves static assets and API paths on the canonical host unchanged', () => {
+  for (const uri of [
+    '/main-ABCDEFGH.js',
+    '/examples/collection-review/one-placed-cube.3mf',
+    '/api/jobs',
+  ]) {
+    const asset = request(productionDomain.canonicalDomain, uri);
+    assert.equal(handler()({ request: asset }), asset);
+    assert.equal(asset.uri, uri);
+  }
+});
+
+void test('keeps the emitted production function under the CloudFront size limit', () => {
+  const size = Buffer.byteLength(spaRewriteFunctionCode(productionDomain), 'utf8');
+  assert.ok(size < CLOUDFRONT_FUNCTION_MAX_BYTES, `function is ${size} bytes`);
+});
+
+void test('maps root guides, root tools and the old material section to their owners', () => {
+  assert.equal(
+    redirectFor(productionDomain.canonicalDomain, '/3mf-units-explained').headers.location.value,
+    'https://www.inspectmesh.com/guides/3mf-units-explained',
+  );
+  assert.equal(
+    redirectFor(productionDomain.canonicalDomain, '/stl-viewer').headers.location.value,
+    'https://www.inspectmesh.com/tools/stl-viewer',
+  );
+  assert.equal(
+    redirectFor(productionDomain.canonicalDomain, '/3d-printing-materials/pla').headers.location
+      .value,
+    'https://www.inspectmesh.com/materials/pla',
+  );
+  assert.equal(
+    redirectFor(productionDomain.canonicalDomain, '/3d-printing-materials').headers.location.value,
+    'https://www.inspectmesh.com/materials',
+  );
+});
+
+void test('does not redirect current pages, unknown root paths or look-alike prefixes', () => {
+  for (const uri of [
+    '/guides',
+    '/tools',
+    '/materials',
+    '/examples',
+    '/contact',
+    '/unknown-page',
+    '/3d-printing-materials-extra',
+    '/guides/3mf-units-explained',
+  ]) {
+    const current = request(productionDomain.canonicalDomain, uri);
+    assert.equal(handler()({ request: current }), current, uri);
+  }
+});
+
+void test('keeps tool and guide slug lists disjoint and free of current top-level routes', () => {
+  const tools = new Set(legacyRootToolSlugs);
+  for (const slug of legacyRootGuideSlugs) {
+    assert.equal(tools.has(slug), false, slug);
+  }
+  for (const slug of [...legacyRootToolSlugs, ...legacyRootGuideSlugs]) {
+    assert.ok(/^[a-z0-9-]+$/.test(slug), slug);
+    assert.ok(
+      ![
+        'tools',
+        'guides',
+        'materials',
+        'examples',
+        'contact',
+        'privacy',
+        'cookies',
+        '3d-printers',
+        'compare',
+        'compare-materials',
+      ].includes(slug),
+      slug,
+    );
+  }
 });
