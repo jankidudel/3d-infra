@@ -1,6 +1,7 @@
 /* eslint-disable no-var -- CloudFront JavaScript 1.0 requires ES5 syntax in the emitted handler. */
 import {
   legacyRootGuideSlugs,
+  legacyRenamedPaths,
   legacyRootToolSlugs,
   legacySectionRedirects,
 } from './legacy-redirects';
@@ -22,6 +23,8 @@ interface LegacyRedirectData {
   readonly tools: string;
   /** Root-level guide slugs, delimited and wrapped by '|'. */
   readonly guides: string;
+  /** Exact clean paths of renamed single pages. */
+  readonly renamed: Readonly<Record<string, string>>;
   readonly sections: Readonly<Record<string, string>>;
 }
 
@@ -64,6 +67,7 @@ function productionRequestHandler(
     //   retired /stl-viewer -> /tools/stl-viewer
     //   pre-move /3mf-units-explained -> /guides/3mf-units-explained
     //   /3d-printing-materials/pla -> /materials/pla
+    //   renamed /why-wont-my-stl-file-slice -> /guides/stl-file-wont-slice
     while (path.length > 1 && path.endsWith('/')) {
       path = path.slice(0, -1);
     }
@@ -74,7 +78,9 @@ function productionRequestHandler(
     }
     var slug = path.slice(1);
     var isRootSlug = slug.length > 0 && slug.indexOf('/') === -1;
-    if (isRootSlug && legacy.tools.indexOf('|' + slug + '|') !== -1) {
+    if (Object.prototype.hasOwnProperty.call(legacy.renamed, path)) {
+      path = legacy.renamed[path]!;
+    } else if (isRootSlug && legacy.tools.indexOf('|' + slug + '|') !== -1) {
       path = '/tools/' + slug;
     } else if (isRootSlug && legacy.guides.indexOf('|' + slug + '|') !== -1) {
       path = '/guides/' + slug;
@@ -129,6 +135,7 @@ export function spaRewriteFunctionCode(customDomain?: CanonicalDomainRedirect): 
     `var legacy = ${JSON.stringify({
       tools: '|' + legacyRootToolSlugs.join('|') + '|',
       guides: '|' + legacyRootGuideSlugs.join('|') + '|',
+      renamed: legacyRenamedPaths,
       sections: legacySectionRedirects,
     })};`,
     productionRequestHandler.toString(),

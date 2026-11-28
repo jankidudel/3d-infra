@@ -201,6 +201,7 @@ const legacyPaths = [
   ...legacyRootGuideSlugs.map((slug) => '/' + slug),
   '/3d-printing-materials',
   ...materialSlugs.map((slug) => '/3d-printing-materials/' + slug),
+  '/why-wont-my-stl-file-slice',
 ];
 
 void test('redirects every retired URL to its current page in one hop', () => {
@@ -223,6 +224,18 @@ void test('redirects a retired URL from the apex host with a trailing slash and 
     result.headers.location.value,
     'https://www.inspectmesh.com/tools/stl-viewer?source=old',
   );
+});
+
+void test('redirects a renamed guide to its new name in one hop', () => {
+  assert.equal(legacyRedirectTarget('/why-wont-my-stl-file-slice'), '/guides/stl-file-wont-slice');
+  const result = redirectFor(productionDomain.canonicalDomain, '/why-wont-my-stl-file-slice/');
+  assert.equal(result.statusCode, 301);
+  assert.equal(
+    result.headers.location.value,
+    'https://www.inspectmesh.com/guides/stl-file-wont-slice',
+  );
+  const nested = request(productionDomain.canonicalDomain, '/why-wont-my-stl-file-slice/extra');
+  assert.equal(handler()({ request: nested }), nested);
 });
 
 void test('leaves the .html object form of a retired URL to 404 at the origin', () => {

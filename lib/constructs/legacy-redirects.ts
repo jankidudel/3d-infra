@@ -166,6 +166,16 @@ export const legacyRootGuideSlugs: readonly string[] = [
   'zero-thickness-stl-surface',
 ];
 
+/**
+ * Renamed single pages: exact clean path to its current path. Unlike section
+ * moves, nothing below the old path is redirected.
+ */
+export const legacyRenamedPaths: Readonly<Record<string, string>> = {
+  // Guide renamed and moved to /guides/stl-file-wont-slice; the pre-rename
+  // root object stayed live as a self-canonical duplicate.
+  '/why-wont-my-stl-file-slice': '/guides/stl-file-wont-slice',
+};
+
 /** Renamed sections: the prefix itself and every path below it move to the new prefix. */
 export const legacySectionRedirects: Readonly<Record<string, string>> = {
   '/3d-printing-materials': '/materials',
@@ -173,6 +183,9 @@ export const legacySectionRedirects: Readonly<Record<string, string>> = {
 
 /** Resolves a clean legacy path to its current path, or undefined. */
 export function legacyRedirectTarget(path: string): string | undefined {
+  if (Object.prototype.hasOwnProperty.call(legacyRenamedPaths, path)) {
+    return legacyRenamedPaths[path];
+  }
   const slug = path.slice(1);
   if (legacyRootToolSlugs.includes(slug)) {
     return '/tools/' + slug;
